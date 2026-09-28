@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 from dataclasses import dataclass
 
@@ -110,7 +111,7 @@ class Client:
                 thinking=(delta_obj.get("reasoning_content") or "").strip(),
             )
             if (delta.text or delta.thinking) and on_delta:
-                on_delta(delta)
+                await _invoke_delta(on_delta, delta)
         return usage
 
     async def _read_json_completion(self, resp, on_delta) -> Usage:
@@ -129,12 +130,18 @@ class Client:
         if not text:
             raise ValueError("chat: provider returned empty content")
         if on_delta:
-            on_delta(Delta(text=text))
+            await _invoke_delta(on_delta, Delta(text=text))
         usage_obj = chunk.get("usage") or {}
         return Usage(
             input_tokens=usage_obj.get("prompt_tokens", 0),
             output_tokens=usage_obj.get("completion_tokens", 0),
         )
+
+
+async def _invoke_delta(on_delta, delta: Delta) -> None:
+    result = on_delta(delta)
+    if inspect.isawaitable(result):
+        await result
 
 
 def _decode_text(content) -> str:
