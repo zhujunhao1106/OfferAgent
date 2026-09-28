@@ -1,0 +1,15 @@
+{
+  "name": "options_preflight",
+  "method": "OPTIONS",
+  "path": "/api/session",
+  "status": 204,
+  "response_headers": {
+    "access-control-allow-headers": "Content-Type, Authorization, X-File-Name, X-Request-ID",
+    "access-control-allow-methods": "GET, POST, OPTIONS",
+    "access-control-allow-origin": "http://allowed.example",
+    "vary": "Origin"
+  },
+  "body": {
+    "__raw__": ""
+  }
+}

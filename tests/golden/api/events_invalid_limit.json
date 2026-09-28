@@ -1,0 +1,20 @@
+{
+  "name": "events_invalid_limit",
+  "method": "GET",
+  "path": "/api/v1/interviews/nonexistent/events?limit=0",
+  "status": 400,
+  "response_headers": {
+    "access-control-allow-headers": "Content-Type, Authorization, X-File-Name, X-Request-ID",
+    "access-control-allow-methods": "GET, POST, OPTIONS",
+    "cache-control": "no-store",
+    "content-type": "application/json; charset=utf-8"
+  },
+  "body": {
+    "error": {
+      "code": "validation",
+      "field": "limit",
+      "message": "limit must be between 1 and 1000",
+      "retryable": false
+    }
+  }
+}

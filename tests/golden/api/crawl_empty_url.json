@@ -1,0 +1,20 @@
+{
+  "name": "crawl_empty_url",
+  "method": "POST",
+  "path": "/api/crawl",
+  "status": 400,
+  "response_headers": {
+    "access-control-allow-headers": "Content-Type, Authorization, X-File-Name, X-Request-ID",
+    "access-control-allow-methods": "GET, POST, OPTIONS",
+    "cache-control": "no-store",
+    "content-type": "application/json; charset=utf-8"
+  },
+  "body": {
+    "error": {
+      "code": "validation_error",
+      "field": "url",
+      "message": "url is required",
+      "retryable": false
+    }
+  }
+}

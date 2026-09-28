@@ -1,0 +1,15 @@
+{
+  "name": "tts_empty_text",
+  "method": "POST",
+  "path": "/api/tts",
+  "status": 503,
+  "response_headers": {
+    "access-control-allow-headers": "Content-Type, Authorization, X-File-Name, X-Request-ID",
+    "access-control-allow-methods": "GET, POST, OPTIONS",
+    "cache-control": "no-store",
+    "content-type": "application/json; charset=utf-8"
+  },
+  "body": {
+    "error": "Speech model is not configured"
+  }
+}

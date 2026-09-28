@@ -1,0 +1,20 @@
+{
+  "name": "resume_empty",
+  "method": "POST",
+  "path": "/api/resume/diagnose",
+  "status": 400,
+  "response_headers": {
+    "access-control-allow-headers": "Content-Type, Authorization, X-File-Name, X-Request-ID",
+    "access-control-allow-methods": "GET, POST, OPTIONS",
+    "cache-control": "no-store",
+    "content-type": "application/json; charset=utf-8"
+  },
+  "body": {
+    "error": {
+      "code": "validation_error",
+      "field": "content",
+      "message": "resume content is required",
+      "retryable": false
+    }
+  }
+}

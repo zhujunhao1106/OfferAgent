@@ -1,0 +1,19 @@
+{
+  "name": "interview_answer_not_found",
+  "method": "POST",
+  "path": "/api/interview",
+  "status": 404,
+  "response_headers": {
+    "access-control-allow-headers": "Content-Type, Authorization, X-File-Name, X-Request-ID",
+    "access-control-allow-methods": "GET, POST, OPTIONS",
+    "cache-control": "no-store",
+    "content-type": "application/json; charset=utf-8"
+  },
+  "body": {
+    "error": {
+      "code": "not_found",
+      "message": "interview not found",
+      "retryable": false
+    }
+  }
+}

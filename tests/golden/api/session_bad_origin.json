@@ -1,0 +1,17 @@
+{
+  "name": "session_bad_origin",
+  "method": "POST",
+  "path": "/api/session",
+  "status": 403,
+  "response_headers": {
+    "cache-control": "no-store",
+    "content-type": "application/json; charset=utf-8"
+  },
+  "body": {
+    "error": {
+      "code": "origin_not_allowed",
+      "message": "Origin is not allowed",
+      "retryable": false
+    }
+  }
+}

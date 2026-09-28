@@ -1,0 +1,20 @@
+{
+  "name": "chat_message_too_long",
+  "method": "POST",
+  "path": "/api/chat",
+  "status": 413,
+  "response_headers": {
+    "access-control-allow-headers": "Content-Type, Authorization, X-File-Name, X-Request-ID",
+    "access-control-allow-methods": "GET, POST, OPTIONS",
+    "cache-control": "no-store",
+    "content-type": "application/json; charset=utf-8"
+  },
+  "body": {
+    "error": {
+      "code": "message_too_large",
+      "field": "message",
+      "message": "message exceeds 20000 characters",
+      "retryable": false
+    }
+  }
+}
