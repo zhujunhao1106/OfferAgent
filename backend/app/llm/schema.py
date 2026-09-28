@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from enum import Enum
 from types import UnionType
 from typing import Any, Union, get_args, get_origin, get_type_hints
 
@@ -65,6 +66,12 @@ def _schema_annotation(annotation, visiting: set) -> dict:
         return {"type": "object", "additionalProperties": _schema_annotation(args[1], visiting)}
     if isinstance(annotation, type) and issubclass(annotation, BaseModel):
         return _schema_model(annotation, visiting)
+    if isinstance(annotation, type) and issubclass(annotation, Enum):
+        if issubclass(annotation, str):
+            return {"type": "string"}
+        if issubclass(annotation, int):
+            return {"type": "integer"}
+        raise ValueError(f"llm: enum {annotation.__name__} must be str- or int-based")
     if annotation is str:
         return {"type": "string"}
     if annotation is bool:
