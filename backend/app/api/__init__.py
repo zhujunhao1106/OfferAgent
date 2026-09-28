@@ -72,6 +72,7 @@ class AppConfig:
     speech_configured: bool = False
     knowledge_entries: int = 0
     knowledge_index: object | None = None
+    store: object | None = None
     interview: object | None = None
     chat: object | None = None
     speech: object | None = None

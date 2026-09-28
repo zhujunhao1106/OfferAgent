@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import os
-import re
 from pathlib import Path
 
 VERSION = "0.4.1"
@@ -79,27 +78,6 @@ def bool_env(name: str, default: bool) -> bool:
     if value in ("0", "f", "F", "FALSE", "false", "False"):
         return False
     return default
-
-
-def duration_env(name: str, default: float) -> float:
-    """Go duration string ('90s', '1.5s', '2m', '1h', '300ms') -> seconds."""
-    value = os.environ.get(name, "").strip()
-    if not value:
-        return default
-    parsed = _parse_duration(value)
-    return parsed if parsed is not None and parsed > 0 else default
-
-
-_DURATION_RE = re.compile(r"^([0-9]+(?:\.[0-9]+)?)(ms|s|m|h)$")
-
-
-def _parse_duration(value: str) -> float | None:
-    match = _DURATION_RE.fullmatch(value)
-    if not match:
-        return None
-    num = float(match.group(1))
-    unit = match.group(2)
-    return {"ms": num / 1000.0, "s": num, "m": num * 60.0, "h": num * 3600.0}[unit]
 
 
 def csv_env(name: str, default: list[str]) -> list[str]:
