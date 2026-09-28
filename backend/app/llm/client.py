@@ -25,7 +25,7 @@ class HTTPError(Exception):
 class Client:
     def __init__(self, config: Config, http_client: httpx.AsyncClient | None = None):
         self._config = normalized(config)
-        self._http = http_client or httpx.AsyncClient()
+        self._http = http_client or httpx.AsyncClient(timeout=httpx.Timeout(self._config.timeout))
 
     async def chat_json(self, messages: list[Message], out_model) -> object:
         schema = schema_for(out_model)

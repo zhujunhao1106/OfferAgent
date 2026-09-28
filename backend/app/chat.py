@@ -48,7 +48,7 @@ class Client:
         if config.max_tokens <= 0:
             config.max_tokens = 4096
         self._config = config
-        self._http = http_client or httpx.AsyncClient()
+        self._http = http_client or httpx.AsyncClient(timeout=httpx.Timeout(self._config.timeout))
 
     async def stream(self, model: str, messages: list[Message], on_delta) -> Usage:
         if not messages:

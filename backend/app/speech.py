@@ -115,7 +115,7 @@ class Client:
         if config.timeout <= 0:
             config.timeout = 60.0
         self._config = config
-        self._http = http_client or httpx.AsyncClient()
+        self._http = http_client or httpx.AsyncClient(timeout=httpx.Timeout(self._config.timeout))
         self._retry_attempts = ASR_MAX_ATTEMPTS
         self._retry_delay = ASR_RETRY_DELAY
 
