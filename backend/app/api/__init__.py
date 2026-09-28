@@ -15,6 +15,18 @@ from ..llm.schema import StrictModel
 from ..middleware import Security
 from ..session import Memory, Store
 from ..streaming import sse_done, sse_event
+from .projections import (
+    deferred_feedback,
+    feedback_focus,
+    map_feedback,
+    map_profile,
+    map_progress,
+    map_question,
+    map_report,
+    map_review,
+    map_snapshot,
+    web_state,
+)
 
 CHAT_SYSTEM_PROMPT = (
     "你是 OfferPilot，一名严谨的 AI Agent / LLM 工程面试教练。基于用户实际提供的问题和材料作答；"
@@ -270,21 +282,44 @@ def create_app(config: AppConfig) -> FastAPI:
                 output = await config.interview.start(input)
             except DomainError as err:
                 raise_interview_error(err)
-            return json_response(output.model_dump(mode="json"))
+            return json_response({
+                "interviewId": output.interviewId,
+                "state": web_state(output.state),
+                "profile": map_profile(output.profile),
+                "question": map_question(output.question, output.progress.current, output.profile),
+                "progress": map_progress(output.progress),
+            })
         if action == "answer":
             input = AnswerRequest.model_validate(data)
             try:
                 output = await config.interview.answer(input)
             except DomainError as err:
                 raise_interview_error(err)
-            return json_response(output.model_dump(mode="json"))
+            next_question = None
+            if output.nextQuestion is not None:
+                next_question = map_question(output.nextQuestion, output.progress.current, None)
+            if output.feedback.deferred:
+                feedback = deferred_feedback(input.questionId)
+            else:
+                feedback = map_feedback(
+                    input.questionId, output.feedback.assessment, output.feedback.summary,
+                    feedback_focus(output.feedback.focus),
+                )
+            return json_response({
+                "interviewId": output.interviewId,
+                "state": web_state(output.state),
+                "feedback": feedback,
+                "nextQuestion": next_question,
+                "progress": map_progress(output.progress),
+                "reportReady": output.reportReady,
+            })
         if action == "report":
             input = ReportRequest.model_validate(data)
             try:
                 output = await config.interview.report(input)
             except DomainError as err:
                 raise_interview_error(err)
-            return json_response(output.model_dump(mode="json"))
+            return json_response(map_report(output.interviewId, output.report))
         raise ApiError(400, "validation", "action must be start, answer, or report", False, "action")
 
     @app.post("/api/v1/interview", dependencies=[Depends(security.authenticate)])
@@ -299,7 +334,7 @@ def create_app(config: AppConfig) -> FastAPI:
             snapshot = await config.interview.snapshot(interview_id)
         except DomainError as err:
             raise_interview_error(err)
-        return json_response(snapshot.model_dump(mode="json"))
+        return json_response(map_snapshot(snapshot))
 
     @app.get("/api/v1/interviews/{interview_id}/review", dependencies=[Depends(security.authenticate)])
     async def handle_review(interview_id: str):
@@ -309,7 +344,7 @@ def create_app(config: AppConfig) -> FastAPI:
             review = await config.interview.review(interview_id)
         except DomainError as err:
             raise_interview_error(err)
-        return json_response(review.model_dump(mode="json"))
+        return json_response(map_review(review))
 
     @app.get("/api/v1/interviews/{interview_id}/events", dependencies=[Depends(security.authenticate)])
     async def handle_events(interview_id: str, after: int = 0, limit: int = 100):
