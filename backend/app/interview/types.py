@@ -231,7 +231,7 @@ class Profile(StrictModel):
 
 class QuestionAdaptation(StrictModel):
     trigger: PolicyAction
-    reason: str
+    reason: str = ""
     basedOnQuestionId: str = ""
     followUpAxis: str = ""
     depth: int = 0
