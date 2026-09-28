@@ -97,6 +97,65 @@ def decode_json(raw: str, out_model: type[BaseModel]) -> BaseModel:
     return out_model.model_validate(data)
 
 
+def decode_json_lenient(raw: str, out_model: type[BaseModel]) -> BaseModel:
+    """Like decode_json, but ignores unknown fields recursively.
+
+    Used only for the json_object compatibility fallback: providers without
+    strict json_schema (e.g. DeepSeek) may emit extra keys such as *_note.
+    Missing required-by-model fields still fail.
+    """
+    stripped = raw.strip()
+    if stripped == "null":
+        raise ValueError("llm: structured response must not be null")
+    try:
+        data = json.loads(stripped)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"llm: decode structured response: {exc}") from exc
+    return out_model.model_validate(_drop_unknown_fields(out_model, data))
+
+
+def _drop_unknown_fields(model: type[BaseModel], value):
+    if not isinstance(value, dict):
+        return value
+    fields = model.model_fields
+    result = {}
+    for key, val in value.items():
+        field = fields.get(key)
+        if field is None:
+            continue
+        result[key] = _drop_value(field.annotation, val)
+    return result
+
+
+def _drop_value(annotation, value):
+    if isinstance(value, list):
+        args = get_args(annotation)
+        if get_origin(annotation) is list and args:
+            return [_drop_value(args[0], item) for item in value]
+        return value
+    if isinstance(value, dict):
+        args = get_args(annotation)
+        if get_origin(annotation) is dict and len(args) == 2:
+            return {key: _drop_value(args[1], item) for key, item in value.items()}
+        nested = _nested_model(annotation)
+        if nested is not None:
+            return _drop_unknown_fields(nested, value)
+        return value
+    return value
+
+
+def _nested_model(annotation):
+    origin = get_origin(annotation)
+    if origin in (Union, UnionType):
+        non_none = [a for a in get_args(annotation) if a is not type(None)]
+        if len(non_none) == 1:
+            return _nested_model(non_none[0])
+        return None
+    if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+        return annotation
+    return None
+
+
 def compact_for_prompt(raw: str, limit: int) -> str:
     raw = raw.strip()
     if len(raw) <= limit:

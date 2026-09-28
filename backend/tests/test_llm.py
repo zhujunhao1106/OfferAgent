@@ -5,7 +5,7 @@ import httpx
 import pytest
 
 from app.llm import Client, Config, ImageInput, Message, Role, decode_json, schema_for
-from app.llm.schema import StrictModel
+from app.llm.schema import StrictModel, decode_json_lenient
 
 
 class Nested(StrictModel):
@@ -61,6 +61,15 @@ def test_decode_json_rejects_unknown_field():
         decode_json('{"title":"x","score":1,"tags":[],"nested":{"label":"a"},"bogus":1}', SampleOutput)
 
 
+def test_decode_json_lenient_ignores_unknown_fields():
+    raw = '{"title":"x","score":1,"tags":[],"nested":{"label":"a","note":"extra"},"bogus":1}'
+    result = decode_json_lenient(raw, SampleOutput)
+    assert result.title == "x"
+    assert result.score == 1
+    assert result.nested.label == "a"
+    assert result.optional_note is None
+
+
 # --- chat_json ---
 
 VALID = {"title": "x", "score": 5, "tags": ["a"], "optional_note": None, "nested": {"label": "n"}}
@@ -90,6 +99,21 @@ async def test_chat_json_fallback_to_json_object():
     result = await make_client(handler).chat_json([Message(Role.USER, "hi")], SampleOutput)
     assert result.title == "x"
     assert formats[0]["type"] == "json_schema" and formats[1] == {"type": "json_object"}
+
+
+async def test_chat_json_fallback_ignores_unknown_fields():
+    # json_object mode is not schema-constrained, so providers may add extra keys.
+    extra = {**VALID, "nested": {"label": "n", "note": "extra"}, "bogus": 1}
+
+    async def handler(request):
+        body = json.loads(request.content)
+        if body["response_format"].get("type") == "json_schema":
+            return httpx.Response(400, json={"error": {"message": "model does not support response_format json_schema"}})
+        return httpx.Response(200, json={"choices": [{"message": {"content": json.dumps(extra)}}]})
+
+    result = await make_client(handler).chat_json([Message(Role.USER, "hi")], SampleOutput)
+    assert result.title == "x"
+    assert result.nested.label == "n"
 
 
 async def test_chat_json_repairs_invalid_json():

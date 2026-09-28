@@ -10,7 +10,7 @@ from email.utils import parsedate_to_datetime
 import httpx
 
 from .config import Config, normalized
-from .schema import compact_for_prompt, decode_json, schema_for
+from .schema import compact_for_prompt, decode_json, decode_json_lenient, schema_for
 from .types import ImageInput, Message, Role
 
 
@@ -36,7 +36,7 @@ class Client:
                 raise
             # compatibility fallback consumes the single recovery budget
             content = await self._complete(_ensure_json_instruction(messages, schema), {"type": "json_object"})
-            return _decode_or_fail(content, out_model, "after one compatibility fallback")
+            return _decode_or_fail_lenient(content, out_model, "after one compatibility fallback")
         try:
             return decode_json(content, out_model)
         except ValueError as decode_err:
@@ -68,7 +68,7 @@ class Client:
                 "content": "Return exactly one JSON object matching this JSON Schema, with no Markdown or commentary:\n" + encoded_schema,
             })
             content = await self._complete_messages(wire, {"type": "json_object"})
-            return _decode_or_fail(content, out_model, "after one compatibility fallback")
+            return _decode_or_fail_lenient(content, out_model, "after one compatibility fallback")
         try:
             return decode_json(content, out_model)
         except ValueError as decode_err:
@@ -187,6 +187,13 @@ def _multimodal_messages(messages: list[Message], images: list[ImageInput]) -> l
 def _decode_or_fail(content: str, out_model, context: str):
     try:
         return decode_json(content, out_model)
+    except ValueError as exc:
+        raise ValueError(f"llm: invalid structured response {context}: {exc}") from exc
+
+
+def _decode_or_fail_lenient(content: str, out_model, context: str):
+    try:
+        return decode_json_lenient(content, out_model)
     except ValueError as exc:
         raise ValueError(f"llm: invalid structured response {context}: {exc}") from exc
 
