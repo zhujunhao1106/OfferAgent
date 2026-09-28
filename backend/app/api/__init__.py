@@ -63,6 +63,13 @@ def create_app(config: AppConfig) -> FastAPI:
     async def _handle_api_error(request: Request, exc: ApiError):
         return json_response(exc.payload(), exc.status)
 
+    @app.exception_handler(Exception)
+    async def _handle_unexpected(request: Request, exc: Exception):
+        return json_response(
+            {"error": {"code": "internal", "message": "Internal server error", "retryable": True}},
+            500,
+        )
+
     app.middleware("http")(security.middleware)
 
     @app.get("/health")

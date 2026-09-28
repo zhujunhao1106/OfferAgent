@@ -82,3 +82,21 @@ def test_options_preflight():
     )
     assert resp.status_code == 204
     assert resp.headers["access-control-allow-origin"] == "http://allowed.example"
+
+
+def test_global_500_handler_does_not_swallow_404():
+    app = create_app(AppConfig())
+
+    @app.get("/boom")
+    async def boom():
+        raise RuntimeError("boom")
+
+    client = TestClient(app, raise_server_exceptions=False)
+    resp = client.get("/boom")
+    assert resp.status_code == 500
+    assert resp.json() == {
+        "error": {"code": "internal", "message": "Internal server error", "retryable": True}
+    }
+
+    missing = client.get("/nonexistent")
+    assert missing.status_code == 404
