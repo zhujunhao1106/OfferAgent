@@ -2,8 +2,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 
 from .. import executiontrace
+
+
+def _iso_from_epoch(epoch: float) -> str:
+    return datetime.fromtimestamp(epoch, tz=timezone.utc).isoformat()
 
 
 TRACE_QUEUED = "queued"
@@ -50,7 +55,7 @@ def emit_trace_event(runtime, event: TraceEvent) -> None:
         label=label,
         status=status,
         agent=event.agent_id,
-        at=executiontrace.now_iso(),
+        at=_iso_from_epoch(event.at),
         duration_ms=int(event.duration * 1000),
     )
     if event.type == TRACE_ERROR:

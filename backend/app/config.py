@@ -70,12 +70,13 @@ def int_env(name: str, default: int) -> int:
 
 
 def bool_env(name: str, default: bool) -> bool:
+    """Mirror Go strconv.ParseBool exactly (no yes/no/on/off aliases)."""
     value = os.environ.get(name, "").strip()
     if not value:
         return default
-    if value.lower() in ("1", "true", "t", "yes", "y", "on"):
+    if value in ("1", "t", "T", "TRUE", "true", "True"):
         return True
-    if value.lower() in ("0", "false", "f", "no", "n", "off"):
+    if value in ("0", "f", "F", "FALSE", "false", "False"):
         return False
     return default
 

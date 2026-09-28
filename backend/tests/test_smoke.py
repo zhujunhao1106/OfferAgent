@@ -67,6 +67,11 @@ def test_session_bad_origin():
     )
     assert resp.status_code == 403
     assert resp.json()["error"]["code"] == "origin_not_allowed"
+    # Go returns 403 before setting CORS allow-methods/allow-headers, but after
+    # writeAPIError sets Cache-Control: no-store.
+    assert resp.headers["cache-control"] == "no-store"
+    assert "access-control-allow-methods" not in resp.headers
+    assert "access-control-allow-origin" not in resp.headers
 
 
 def test_options_preflight():

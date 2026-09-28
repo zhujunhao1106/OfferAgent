@@ -25,28 +25,28 @@ class Security:
 
     async def middleware(self, request: Request, call_next):
         request_id = request.headers.get("x-request-id") or new_request_id()
-        base_headers = {
+        headers = {
             "X-Request-ID": request_id,
             "X-Content-Type-Options": "nosniff",
             "Referrer-Policy": "no-referrer",
-            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type, Authorization, X-File-Name, X-Request-ID",
         }
         origin = request.headers.get("origin")
-        if origin is not None:
+        if origin:
             if origin not in self.allowed_origins:
                 return JSONResponse(
                     {"error": {"code": "origin_not_allowed", "message": "Origin is not allowed", "retryable": False}},
                     status_code=403,
                     media_type="application/json; charset=utf-8",
-                    headers=base_headers,
+                    headers={**headers, "Cache-Control": "no-store"},
                 )
-            base_headers["Access-Control-Allow-Origin"] = origin
-            base_headers["Vary"] = "Origin"
+            headers["Access-Control-Allow-Origin"] = origin
+            headers["Vary"] = "Origin"
+        headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-File-Name, X-Request-ID"
         if request.method == "OPTIONS":
-            return Response(status_code=204, headers=base_headers)
+            return Response(status_code=204, headers=headers)
         response = await call_next(request)
-        for key, value in base_headers.items():
+        for key, value in headers.items():
             response.headers.setdefault(key, value)
         return response
 
