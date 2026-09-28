@@ -39,14 +39,8 @@ jobs:
           test "$(node -p 'require("./web/package-lock.json").version')" = "$OFFERPILOT_RELEASE_VERSION"
           test "$(node -p 'require("./web/package-lock.json").packages[""].version')" = "$OFFERPILOT_RELEASE_VERSION"
           grep --fixed-strings --line-regexp \
-            "const Version = \"$OFFERPILOT_RELEASE_VERSION\"" \
-            backend/internal/config/version.go
-
-      - name: Use Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: backend/go.mod
-          cache-dependency-path: backend/go.sum
+            "VERSION = \"$OFFERPILOT_RELEASE_VERSION\"" \
+            backend/app/config.py
 
       - name: Install dependencies
         run: |
@@ -65,27 +59,27 @@ jobs:
       - name: E2E tests
         run: npx vitest run tests/e2e
 
-  go:
+  backend:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v5
+      - uses: astral-sh/setup-uv@v5
         with:
-          go-version-file: backend/go.mod
-          cache-dependency-path: backend/go.sum
+          version: "0.12.18"
+          python-version: "3.12"
 
-      - name: Test Go backend
+      - name: Install backend dependencies
         working-directory: backend
-        run: go test ./...
+        run: uv sync --frozen
+
+      - name: Test Python backend
+        working-directory: backend
+        run: uv run pytest
 
       - name: Run offline eval gate
         working-directory: backend
-        run: go run ./cmd/offerpilot-eval -pretty=false
-
-      - name: Vet Go backend
-        working-directory: backend
-        run: go vet ./...
+        run: uv run python -m evals -pretty=false
 
   web:
     runs-on: ubuntu-latest

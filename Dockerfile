@@ -1,13 +1,4 @@
-FROM golang:1.26-bookworm AS build
-WORKDIR /src/backend
-
-COPY backend/go.* ./
-RUN go mod download
-
-COPY backend/ ./
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/offerpilot-api ./cmd/offerpilot-api
-
-FROM debian:bookworm-slim AS runtime
+FROM python:3.12-slim AS runtime
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl \
     && rm -rf /var/lib/apt/lists/* \
@@ -15,7 +6,13 @@ RUN apt-get update \
     && useradd --system --gid offerpilot --home-dir /app offerpilot
 
 WORKDIR /app
-COPY --from=build /out/offerpilot-api ./offerpilot-api
+COPY --from=ghcr.io/astral-sh/uv:0.12.18 /uv /uvx /bin/
+
+COPY backend/pyproject.toml backend/uv.lock ./
+COPY backend/app ./app
+COPY backend/evals ./evals
+RUN uv sync --frozen --no-dev
+
 COPY knowledge/ ./knowledge/
 
 RUN mkdir -p /app/data /app/config \
@@ -31,4 +28,4 @@ EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD curl --fail --silent --show-error http://127.0.0.1:3001/health/ready || exit 1
 
-CMD ["./offerpilot-api"]
+CMD ["/app/.venv/bin/python", "-m", "app.main"]
