@@ -1,0 +1,68 @@
+# Production compose for the ECS deployment.
+#
+# Images are built by CI and pushed to Alibaba Cloud ACR; this file only pulls
+# and runs them. It never builds on the ECS (the production box is 2 vCPU / 2 GB
+# and a Next.js build would OOM).
+#
+# Required in the ECS-side .env:
+#   ACR_REGISTRY   registry host, defaults to registry.cn-beijing.aliyuncs.com
+#   ACR_NAMESPACE  ACR namespace that holds the two repositories
+#   OFFERPILOT_TAG image tag to run, defaults to latest
+#
+# Deploy: docker compose -f docker-compose.prod.yml pull
+#         docker compose -f docker-compose.prod.yml up -d
+services:
+  api:
+    image: ${ACR_REGISTRY:-registry.cn-beijing.aliyuncs.com}/${ACR_NAMESPACE}/offerpilot-api:${OFFERPILOT_TAG:-latest}
+    ports:
+      - "127.0.0.1:3001:3001"
+    env_file:
+      - .env
+    environment:
+      - PORT=3001
+      - OFFERPILOT_REQUIRE_AUTH=true
+      - OFFERPILOT_CONFIG_PATH=/app/config/.env
+      - DB_PATH=/app/data/offerpilot.db
+      - KNOWLEDGE_DIR=/app/knowledge
+      - LOG_LEVEL=info
+      # The api container has no NODE_ENV, so settings.py would treat this as
+      # non-production and default the crawler to accepting TUN fake-IP ranges.
+      - OFFERPILOT_ALLOW_TUN_FAKE_IP=false
+    volumes:
+      - app-data:/app/data
+      - app-config:/app/config:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent http://127.0.0.1:3001/health/ready >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+
+  web:
+    image: ${ACR_REGISTRY:-registry.cn-beijing.aliyuncs.com}/${ACR_NAMESPACE}/offerpilot-web:${OFFERPILOT_TAG:-latest}
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      - BACKEND_URL=http://api:3001
+      - OFFERPILOT_PROJECT_ROOT=/app
+      - OFFERPILOT_CONFIG_PATH=/app/config/.env
+      - OFFERPILOT_ENABLE_CONFIG_API=false
+    volumes:
+      - app-config:/app/config
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/api/health').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+
+volumes:
+  app-data:
+  app-config:
