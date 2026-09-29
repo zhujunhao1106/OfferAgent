@@ -102,17 +102,19 @@ jobs:
           echo "containers did not become healthy"; docker compose -f docker-compose.prod.yml ps; exit 1'
           ENCODED=$(printf '%s' "$SCRIPT" | base64 -w0)
 
+          # The first deploy pulls two images onto a 2 vCPU / 2 GB box, so
+          # give the remote script well beyond the default window.
           INVOKE_ID=$(aliyun ecs RunCommand \
             --RegionId "$ECS_REGION" \
             --InstanceId.1 "$ECS_INSTANCE_ID" \
             --Type RunShellScript \
             --ContentEncoding Base64 \
-            --Timeout 300 \
+            --Timeout 900 \
             --CommandContent "$ENCODED" \
             | jq -r '.InvokeId')
           echo "InvokeId=$INVOKE_ID"
 
-          for _ in $(seq 1 40); do
+          for _ in $(seq 1 90); do
             sleep 10
             RESULT=$(aliyun ecs DescribeInvocationResults --RegionId "$ECS_REGION" --InvokeId "$INVOKE_ID")
             STATUS=$(printf '%s' "$RESULT" | jq -r '.Invocation.InvocationResults.InvocationResult[0].InvocationStatus')
@@ -127,5 +129,5 @@ jobs:
                 ;;
             esac
           done
-          echo "deploy timed out after 400s"
+          echo "deploy timed out after 900s"
           exit 1
