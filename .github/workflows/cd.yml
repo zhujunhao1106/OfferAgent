@@ -79,6 +79,10 @@ jobs:
         env:
           ALIBABA_CLOUD_ACCESS_KEY_ID: ${{ secrets.ALIYUN_ACCESS_KEY_ID }}
           ALIBABA_CLOUD_ACCESS_KEY_SECRET: ${{ secrets.ALIYUN_ACCESS_KEY_SECRET }}
+          # The CLI resolves its own region context from this variable and
+          # aborts with "region can't be empty" before building the request;
+          # --RegionId is only an API parameter and does not satisfy it.
+          ALIBABA_CLOUD_REGION_ID: ${{ env.ECS_REGION }}
         run: |
           set -euo pipefail
           # RunCommand takes a repeatList, not a JSON array string; also wait for
