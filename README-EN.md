@@ -6,8 +6,8 @@
 
 An end-to-end AI interview agent for JD and resume analysis, adaptive mock interviews, voice diagnosis, and evidence-grounded reports.
 
-[![CI](https://github.com/ranxi2001/OfferPilot/actions/workflows/ci.yml/badge.svg)](https://github.com/ranxi2001/OfferPilot/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/ranxi2001/OfferPilot?include_prereleases&label=release)](https://github.com/ranxi2001/OfferPilot/releases)
+[![CI](https://github.com/zhujunhao1106/OfferAgent/actions/workflows/ci.yml/badge.svg)](https://github.com/zhujunhao1106/OfferAgent/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/zhujunhao1106/OfferAgent?include_prereleases&label=release)](https://github.com/zhujunhao1106/OfferAgent/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](./backend)
 [![Node.js](https://img.shields.io/badge/Node.js-24-5FA04E?logo=nodedotjs&logoColor=white)](./web/package.json)

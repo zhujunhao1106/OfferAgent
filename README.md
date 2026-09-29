@@ -6,8 +6,8 @@
 
 从 JD 与简历分析，到自适应模拟面试、语音诊断和能力报告的一站式 AI 面试 Agent。
 
-[![CI](https://github.com/ranxi2001/OfferPilot/actions/workflows/ci.yml/badge.svg)](https://github.com/ranxi2001/OfferPilot/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/ranxi2001/OfferPilot?include_prereleases&label=release)](https://github.com/ranxi2001/OfferPilot/releases)
+[![CI](https://github.com/zhujunhao1106/OfferAgent/actions/workflows/ci.yml/badge.svg)](https://github.com/zhujunhao1106/OfferAgent/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/zhujunhao1106/OfferAgent?include_prereleases&label=release)](https://github.com/zhujunhao1106/OfferAgent/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](./backend)
 [![Node.js](https://img.shields.io/badge/Node.js-24-5FA04E?logo=nodedotjs&logoColor=white)](./web/package.json)
