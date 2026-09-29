@@ -69,6 +69,10 @@ jobs:
     needs: build-push
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
       - name: Install aliyun CLI
         run: |
           curl -fsSL -o /tmp/aliyun.tgz https://aliyun-cli.oss-cn-hangzhou.aliyuncs.com/aliyun-cli-linux-latest-amd64.tgz
@@ -85,10 +89,16 @@ jobs:
           ALIBABA_CLOUD_REGION_ID: ${{ env.ECS_REGION }}
         run: |
           set -euo pipefail
+          # The ECS copy of the compose file is not a checkout, so write the
+          # repo version on every deploy; otherwise a compose change would
+          # silently keep running the stale copy that was placed there once.
+          COMPOSE_B64=$(base64 -w0 docker-compose.prod.yml)
+
           # RunCommand takes a repeatList, not a JSON array string; also wait for
           # the containers to report healthy before declaring the deploy good.
           SCRIPT='set -e
           cd /root/offerpilot
+          echo '"$COMPOSE_B64"' | base64 -d > docker-compose.prod.yml
           docker compose -f docker-compose.prod.yml pull
           docker compose -f docker-compose.prod.yml up -d
           docker image prune -f
