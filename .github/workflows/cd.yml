@@ -43,6 +43,11 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
+          # ACR personal edition rejects the OCI attestation manifests that
+          # BuildKit attaches by default, failing the push with "unknown
+          # manifest class for application/vnd.oci.empty.v1+json".
+          provenance: false
+          sbom: false
           push: true
           tags: |
             ${{ env.ACR_REGISTRY }}/${{ env.ACR_NAMESPACE }}/offerpilot-api:${{ github.sha }}
@@ -53,6 +58,8 @@ jobs:
         with:
           context: .
           file: ./web/Dockerfile
+          provenance: false
+          sbom: false
           push: true
           tags: |
             ${{ env.ACR_REGISTRY }}/${{ env.ACR_NAMESPACE }}/offerpilot-web:${{ github.sha }}
