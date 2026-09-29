@@ -3,7 +3,8 @@ import { createServer } from 'node:net';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
-const script = resolve(process.cwd(), 'web/scripts/preflight-dev.mjs');
+const webRoot = process.cwd();
+const script = resolve(webRoot, 'scripts/preflight-dev.mjs');
 const servers: ReturnType<typeof createServer>[] = [];
 
 afterEach(async () => {
@@ -14,7 +15,7 @@ afterEach(async () => {
 
 function runPreflight(port: number) {
   return spawnSync(process.execPath, [script], {
-    cwd: resolve(process.cwd(), 'web'),
+    cwd: webRoot,
     encoding: 'utf8',
     env: { ...process.env, PORT: String(port) },
   });
