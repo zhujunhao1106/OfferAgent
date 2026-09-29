@@ -14,10 +14,10 @@ v0.3.0-alpha.1 默认语料包含 30 个案例和 90 道题，完整覆盖：
 在 `backend` 目录执行：
 
 ```bash
-go run ./cmd/offerpilot-eval
-go run ./cmd/offerpilot-eval -pretty=false
-go run ./cmd/offerpilot-eval -corpus ./evals/corpus/v0.3.0-alpha.1.json
-go run ./cmd/offerpilot-eval -schema
+uv run python -m evals
+uv run python -m evals -pretty=false
+uv run python -m evals -corpus ./evals/corpus/v0.3.0-alpha.1.json
+uv run python -m evals -schema
 ```
 
 命令只向标准输出写 JSON report。退出码含义：
@@ -53,14 +53,14 @@ go run ./cmd/offerpilot-eval -schema
 
 结构定义在 `backend/evals/schema/corpus.schema.json`，当前 schema 版本为
 `1.0.0`。解码器拒绝未知字段、多个 JSON 根值、重复 ID、非法枚举、无证据目录、
-空问题和不受支持的 schema 版本。默认 corpus 被 `go:embed` 固化进 CLI，运行结果
-不依赖工作目录、网络或 provider 状态。
+空问题和不受支持的 schema 版本。默认 corpus 随 `backend/evals/corpus/` 一起打包，
+运行结果不依赖工作目录、网络或 provider 状态。
 
 修改 corpus 时必须：
 
 1. 使用合成或可靠脱敏材料，不能提交真实 JD、简历、回答或参考答案。
 2. 升级 `corpusVersion`，保留旧版本文件以便比较发布结果。
-3. 运行 `go test ./evals ./cmd/offerpilot-eval -count=1`。
+3. 运行 `uv run pytest tests/test_evals.py`。
 4. 运行默认 CLI，并把 JSON 指标归档到候选版本验证记录。
 
 ## 能力边界

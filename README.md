@@ -9,8 +9,8 @@
 [![CI](https://github.com/ranxi2001/OfferPilot/actions/workflows/ci.yml/badge.svg)](https://github.com/ranxi2001/OfferPilot/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/ranxi2001/OfferPilot?include_prereleases&label=release)](https://github.com/ranxi2001/OfferPilot/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
-[![Go](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white)](./backend)
-[![Node.js](https://img.shields.io/badge/Node.js-24-5FA04E?logo=nodedotjs&logoColor=white)](./package.json)
+[![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](./backend)
+[![Node.js](https://img.shields.io/badge/Node.js-24-5FA04E?logo=nodedotjs&logoColor=white)](./web/package.json)
 
 [English](./README-EN.md) · [快速开始](#-快速开始) · [功能模块](#-功能模块) · [架构概览](#-架构概览) · [版本记录](./CHANGELOG.md)
 
@@ -27,21 +27,21 @@
 - **证据驱动**：同时读取 JD 与简历，围绕真实经历生成问题、追问与评分。
 - **完整闭环**：覆盖文本诊断、语音回答、自适应模拟面试和 Markdown / PDF 报告。
 - **可审计 Agent**：展示安全的执行轨迹与决策摘要，不暴露私有思维链和敏感材料。
-- **工程化后端**：Go typed Agent Harness + Next.js Web/BFF，不依赖 LangChain / LangGraph。
+- **工程化后端**：Python typed Agent Harness + Next.js Web/BFF，不依赖 LangChain / LangGraph。
 
-项目也是 `zero2Agent` 学习体系的实战项目，将 Agent 工程知识、面试题库和架构设计落地为可运行系统。推荐使用 server-backed 部署：Next.js Web 通过受保护的 Go API 调用 LLM / ASR / TTS provider。
+项目也是 `zero2Agent` 学习体系的实战项目，将 Agent 工程知识、面试题库和架构设计落地为可运行系统。推荐使用 server-backed 部署：Next.js Web 通过受保护的 API 调用 LLM / ASR / TTS provider。
 
 ## 🎬 Demo
 
 ### 证据加权的 JD 匹配
 
-上传、粘贴或抓取 JD 与简历后，Go `resume_matcher` Harness Agent 会按硬性要求、职责匹配、履历证据和加分项四个维度进行语义评分。结果展示材料可支撑的匹配项、关键差距和可执行的定向准备建议，不使用关键词交集或截断词组充当分析。
+上传、粘贴或抓取 JD 与简历后，`resume_matcher` Harness Agent 会按硬性要求、职责匹配、履历证据和加分项四个维度进行语义评分。结果展示材料可支撑的匹配项、关键差距和可执行的定向准备建议，不使用关键词交集或截断词组充当分析。
 
 ![OfferPilot 证据加权 JD 匹配效果](./assets/jd-match-semantic-analysis.png)
 
 ### 多模态简历诊断
 
-上传 PDF 后，Go `resume_diagnostician` Harness Agent 会联合分析提取的文字证据与 PDF 页面视觉，识别真实语义章节，并从内容密度、工程证据、量化结果、技术决策和视觉版式等维度给出诊断。结果包含核心优势、主要风险、逐章节问题、可执行建议和可直接采用的改写，不再把整份简历压成一个段落套用规则模板。
+上传 PDF 后，`resume_diagnostician` Harness Agent 会联合分析提取的文字证据与 PDF 页面视觉，识别真实语义章节，并从内容密度、工程证据、量化结果、技术决策和视觉版式等维度给出诊断。结果包含核心优势、主要风险、逐章节问题、可执行建议和可直接采用的改写，不再把整份简历压成一个段落套用规则模板。
 
 ![OfferPilot 多模态简历诊断效果](./assets/resume-multimodal-diagnosis.png)
 
@@ -79,7 +79,7 @@
 
 ## 🚀 v0.4.1 多模态简历诊断
 
-- 新增 Go `resume_diagnostician` Harness Agent，联合分析简历文字证据与 PDF 页面视觉，不再套用规则模板。
+- 新增 `resume_diagnostician` Harness Agent，联合分析简历文字证据与 PDF 页面视觉，不再套用规则模板。
 - 按真实语义章节输出核心优势、主要风险、版式评分、证据化问题、修改建议与可直接采用的改写。
 - OpenAI-compatible 模型边界新增结构化多模态输入，并对图片数量、请求体大小和执行时间设置明确上限。
 - 修复 PDF 文本被压成单段的问题，保留章节和项目符号换行，提升中文简历的证据定位质量。
@@ -88,7 +88,7 @@
 
 ## 🚀 v0.4.0 语义匹配与动态职位抓取
 
-- 新增 Go `resume_matcher` Harness Agent，按硬性要求、职责、履历证据和加分项进行语义评分，不再使用关键词交集。
+- 新增 `resume_matcher` Harness Agent，按硬性要求、职责、履历证据和加分项进行语义评分，不再使用关键词交集。
 - 新增 `web_crawler` Agent：阿里、字节等 Provider 走低成本快路径，未知 SPA 进入有界 Function Tool fallback。
 - 中文 CID 字体 PDF 通过本地 CMap 和 PDF.js worker 正确提取，开发与生产构建均完成真实文件验证。
 - JD 匹配与模拟面试复用统一材料输入，支持上传、粘贴和 URL 抓取。
@@ -99,7 +99,7 @@
 
 - 对话式诊断现在会保留同一会话内的面试官问题、候选人回答和历史诊断，语音回答不再脱离上一轮问题。
 - 流式输出支持暂停自动跟随；向上滚动即可稳定阅读，点击向下按钮返回最新内容。
-- 面试知识库已同步 [zero2Agent](https://github.com/ranxi2001/zero2Agent) 最新内容，Go 后端当前加载 486 条知识条目。
+- 面试知识库已同步 [zero2Agent](https://github.com/ranxi2001/zero2Agent) 最新内容，后端当前加载 486 条知识条目。
 
 ## 📚 v0.3.2 模拟面试复盘升级
 
@@ -182,22 +182,27 @@ OfferPilot 的后端已从 TypeScript 切换为 **Go**。Go API 现在承载 typ
 
 ```text
 backend/
-  cmd/offerpilot-api/  Go API 装配与优雅退出
-  internal/harness/    typed 子 Agent、并发边界、trace、结构化输出
-  internal/interview/  面试聚合、证据、评估、策略与报告
-  internal/jobmatch/   JD / 简历证据加权语义匹配 Agent
-  internal/resumediagnosis/  多模态简历内容与版式诊断 Agent
-  internal/knowledge/  Markdown 逐题解析与 BM25 检索
-  internal/httpapi/    鉴权、CORS、SSE、限额与前端兼容投影
-  internal/llm/        OpenAI-compatible 模型网关
-  internal/speech/     MiMo ASR/TTS
+  app/main.py          API 装配与优雅退出
+  app/harness/         typed 子 Agent、并发边界、trace、结构化输出
+  app/interview/       面试聚合、证据、评估、策略与报告
+  app/jobmatch.py      JD / 简历证据加权语义匹配 Agent
+  app/resumediagnosis.py  多模态简历内容与版式诊断 Agent
+  app/knowledge/       Markdown 逐题解析与 BM25 检索
+  app/api/             鉴权、CORS、SSE、限额与前端兼容投影
+  app/llm/             OpenAI-compatible 模型网关
+  app/speech.py        MiMo ASR/TTS
+  app/webcrawler/      JD 抓取快路径与有界 fallback
+  evals/               离线确定性质量门禁
+  tests/               pytest 测试套件
 
 web/
   src/app/            Next.js App Router、BFF、PDF/DOCX/URL 解析
   src/components/     面试作战台、材料输入、Chat 与报告 UI
 ```
 
-完整设计与迁移约束见 [Agent Harness 与 Go 后端架构](./docs/agent-harness-architecture.md)。
+完整设计与迁移约束见 [Python 重写设计](./docs/python-rewrite-design.md) 与
+[迁移方案](./docs/python-rewrite-plan.md)。
+历史架构讨论（Go 时代）保留在 [Agent Harness 架构](./docs/agent-harness-architecture.md)。
 下一阶段的优先级、验收指标和发布门禁见 [v0.3.0 优化方案](./docs/v0.3.0-optimization-plan.md)。
 
 ## 模型与音频配置
@@ -229,7 +234,7 @@ MIMO_TTS_VOICE=mimo_default
 
 说明：
 
-- Go 后端使用 OpenAI-compatible 文本接口，默认聊天模型是 `gpt-5.5`。
+- 后端使用 OpenAI-compatible 文本接口，默认聊天模型是 `gpt-5.5`。
 - OpenAI 兼容模型走 `OPENAI_BASE_URL`。
 - Mimo ASR/TTS 使用官方 `https://api.xiaomimimo.com/v1`。
 - MiMo TTS 默认使用官方预置音色 `mimo_default`，可通过 `MIMO_TTS_VOICE` 覆盖。
@@ -238,18 +243,19 @@ MIMO_TTS_VOICE=mimo_default
 
 ## ⚡ 快速开始
 
-项目使用 Go 1.26 和 Node.js 24：Go 负责 API 与 Agent Harness，Node.js 仅用于 Next.js Web/BFF。
+项目使用 Python 3.12（[uv](https://docs.astral.sh/uv/) 管理）和 Node.js 24：Python 负责 API 与 Agent Harness，Node.js 仅用于 Next.js Web/BFF。
 
 ```bash
 cp .env.example .env
+cd backend && uv sync && cd ..
 cd web && npm install && cd ..
 ```
 
-终端 1：启动 Go API：
+终端 1：启动 API：
 
 ```bash
 cd backend
-go run ./cmd/offerpilot-api
+uv run python -m app.main
 ```
 
 终端 2：启动 Web UI：
@@ -320,8 +326,8 @@ Web: http://localhost:3000
 最近一次本地验证命令：
 
 ```bash
-cd backend && go test ./... && cd ..
-npx vitest run tests/unit tests/e2e
+cd backend && uv sync --frozen && uv run pytest && uv run python -m evals -pretty=false && cd ..
+npm --prefix web run test
 npm --prefix web run build
 git diff --check
 ```
@@ -329,8 +335,9 @@ git diff --check
 预期结果：
 
 ```text
-Go 后端测试通过
-单元测试和 E2E 测试通过
+Python 后端测试通过
+离线 Eval 门禁通过
+Web 单元测试通过
 Next.js 生产构建通过
 diff whitespace 检查通过
 ```

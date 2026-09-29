@@ -2,6 +2,12 @@
 
 日期：2026-06-18
 
+> **状态说明（2026-09-29）**：本文写于 legacy TypeScript 后端时期，文中提到
+> `better-sqlite3`、Node.js SDK、`data/agent.db` 与 "JS 内存 cosine" 的地方都指已退役的
+> TS 实现。当前 Python 后端使用 Markdown 原子问答块 + 内存 BM25
+> （`backend/app/knowledge/retriever.py`），SQLite 状态库为 `data/offerpilot.db`。
+> 本文的**结论与演进方向**仍然有效，实施时需按 Python 栈改写。
+
 ## 结论
 
 不采用本地 hash embedding 作为正式方案。
@@ -240,13 +246,14 @@ OPENAI_MODEL=gpt-5.5
 **触发条件**：知识库增长到 5,000+ 条，或需要 DiskANN/HNSW 级别检索速度
 
 **改动**：
-- 引入 `sqlite-vec` 扩展（C 编译，通过 better-sqlite3 加载 `.so`/.`dylib`）
+- 引入 `sqlite-vec` 扩展（C 编译，Python `sqlite3` 通过
+  `enable_load_extension` 加载 `.so`/`.dylib`/`.dll`）
 - 新建 `vec_knowledge` 虚拟表，使用 IVF 或 HNSW 索引
-- `searchAsync()` 从 JS cosine 切换为 SQL `vec_distance_cosine()`
+- 检索从 Python 内存 cosine 切换为 SQL `vec_distance_cosine()`
 - 保留 FTS5，混合召回加权排序
 
 **优势**：
-- 同一个 `data/agent.db` 文件，零迁移
+- 同一个 `data/offerpilot.db` 文件，零迁移
 - 仍然是嵌入式、单文件、无服务依赖
 - 检索性能从 O(n) 降至 O(log n)
 

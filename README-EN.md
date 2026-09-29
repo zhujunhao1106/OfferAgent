@@ -9,8 +9,8 @@ An end-to-end AI interview agent for JD and resume analysis, adaptive mock inter
 [![CI](https://github.com/ranxi2001/OfferPilot/actions/workflows/ci.yml/badge.svg)](https://github.com/ranxi2001/OfferPilot/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/ranxi2001/OfferPilot?include_prereleases&label=release)](https://github.com/ranxi2001/OfferPilot/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
-[![Go](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white)](./backend)
-[![Node.js](https://img.shields.io/badge/Node.js-24-5FA04E?logo=nodedotjs&logoColor=white)](./package.json)
+[![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](./backend)
+[![Node.js](https://img.shields.io/badge/Node.js-24-5FA04E?logo=nodedotjs&logoColor=white)](./web/package.json)
 
 [中文](./README.md) · [Quick Start](#-quick-start) · [Features](#-features) · [Architecture](#-architecture) · [Changelog](./CHANGELOG.md)
 
@@ -27,21 +27,21 @@ An end-to-end AI interview agent for JD and resume analysis, adaptive mock inter
 - **Evidence-grounded**: reads the JD and resume together to generate questions, follow-ups, and assessments around real experience.
 - **End-to-end workflow**: covers text diagnosis, voice answers, adaptive mock interviews, and Markdown / PDF reports.
 - **Auditable agents**: exposes safe execution events and decision summaries without leaking private reasoning or sensitive material.
-- **Production-oriented**: built on a Go typed Agent Harness and Next.js Web/BFF, without LangChain or LangGraph.
+- **Production-oriented**: built on a Python typed Agent Harness and Next.js Web/BFF, without LangChain or LangGraph.
 
-OfferPilot is also a practical implementation of the `zero2Agent` learning system, turning agent engineering concepts, interview knowledge, and architecture into a working application. The recommended server-backed deployment keeps LLM / ASR / TTS provider access behind the protected Go API.
+OfferPilot is also a practical implementation of the `zero2Agent` learning system, turning agent engineering concepts, interview knowledge, and architecture into a working application. The recommended server-backed deployment keeps LLM / ASR / TTS provider access behind the protected API.
 
 ## 🎬 Demo
 
 ### Evidence-Weighted JD Matching
 
-After a JD and resume are uploaded, pasted, or fetched, the Go `resume_matcher` Harness Agent performs semantic scoring across hard requirements, responsibility alignment, resume evidence, and bonus qualifications. Results distinguish supported matches from material gaps and provide concrete preparation actions without relying on keyword intersection or fragmented phrases.
+After a JD and resume are uploaded, pasted, or fetched, the `resume_matcher` Harness Agent performs semantic scoring across hard requirements, responsibility alignment, resume evidence, and bonus qualifications. Results distinguish supported matches from material gaps and provide concrete preparation actions without relying on keyword intersection or fragmented phrases.
 
 ![OfferPilot evidence-weighted JD matching](./assets/jd-match-semantic-analysis.png)
 
 ### Multimodal Resume Diagnosis
 
-After a PDF is uploaded, the Go `resume_diagnostician` Harness Agent jointly analyzes extracted text evidence and rendered PDF pages. It identifies semantic sections and evaluates content density, engineering evidence, quantified outcomes, technical decisions, and visual layout. Results include strengths, risks, section-level findings, actionable guidance, and ready-to-use rewrites instead of reducing the entire resume to one paragraph and applying a rule template.
+After a PDF is uploaded, the `resume_diagnostician` Harness Agent jointly analyzes extracted text evidence and rendered PDF pages. It identifies semantic sections and evaluates content density, engineering evidence, quantified outcomes, technical decisions, and visual layout. Results include strengths, risks, section-level findings, actionable guidance, and ready-to-use rewrites instead of reducing the entire resume to one paragraph and applying a rule template.
 
 ![OfferPilot multimodal resume diagnosis](./assets/resume-multimodal-diagnosis.png)
 
@@ -79,7 +79,7 @@ An exported sample report is available in [demo.md](./assets/demo.md).
 
 ## 🚀 v0.4.1 Multimodal Resume Diagnosis
 
-- Adds the Go `resume_diagnostician` Harness Agent to jointly analyze resume text evidence and rendered PDF pages instead of applying rule templates.
+- Adds the `resume_diagnostician` Harness Agent to jointly analyze resume text evidence and rendered PDF pages instead of applying rule templates.
 - Produces semantic sections, strengths, risks, layout scoring, evidence-grounded findings, actionable guidance, and ready-to-use rewrites.
 - Adds structured multimodal input to the OpenAI-compatible model boundary with explicit limits for images, request size, and execution time.
 - Preserves PDF section and bullet line breaks instead of flattening the resume, improving evidence localization for Chinese resumes.
@@ -88,7 +88,7 @@ An exported sample report is available in [demo.md](./assets/demo.md).
 
 ## 🚀 v0.4.0 Semantic Matching And Dynamic Job Crawling
 
-- Adds the Go `resume_matcher` Harness Agent for evidence-weighted semantic scoring across hard requirements, responsibilities, resume evidence, and bonus qualifications instead of keyword intersection.
+- Adds the `resume_matcher` Harness Agent for evidence-weighted semantic scoring across hard requirements, responsibilities, resume evidence, and bonus qualifications instead of keyword intersection.
 - Adds the `web_crawler` Agent: known providers such as Alibaba and ByteDance use low-cost fast paths, while unknown SPAs enter a bounded Function Tool fallback.
 - Correctly extracts Chinese CID-font PDFs through local CMaps and an explicit PDF.js worker, verified in both development and production builds.
 - Reuses the same upload, paste, and URL material controls across JD matching and mock interviews.
@@ -99,7 +99,7 @@ An exported sample report is available in [demo.md](./assets/demo.md).
 
 - Conversational diagnosis now preserves the interviewer's question, the candidate's answer, and prior feedback within the same session.
 - Streaming output stops following when the user scrolls up, with a jump-to-latest control to resume.
-- The interview knowledge base is synchronized with the latest [zero2Agent](https://github.com/ranxi2001/zero2Agent) content; the Go backend now loads 486 entries.
+- The interview knowledge base is synchronized with the latest [zero2Agent](https://github.com/ranxi2001/zero2Agent) content; the backend now loads 486 entries.
 
 ## 📚 v0.3.2 Mock Interview Review
 
@@ -204,20 +204,26 @@ See [Alpha release verification](./docs/v0.3.0-alpha.1-release-verification.md) 
 
 ```text
 backend/
-  cmd/offerpilot-api/  Go API composition and graceful shutdown
-  internal/harness/    typed agents, bounded concurrency, traces
-  internal/interview/  evidence, assessment, policy, report aggregate
-  internal/jobmatch/   evidence-weighted JD/resume semantic matching Agent
-  internal/resumediagnosis/  multimodal resume content and layout diagnosis Agent
-  internal/knowledge/  question-level Markdown parser and BM25 search
-  internal/httpapi/    auth, CORS, SSE, limits, Web compatibility DTOs
-  internal/llm/        OpenAI-compatible structured model gateway
-  internal/speech/     MiMo ASR/TTS
+  app/main.py          API composition and graceful shutdown
+  app/harness/         typed agents, bounded concurrency, traces
+  app/interview/       evidence, assessment, policy, report aggregate
+  app/jobmatch.py      evidence-weighted JD/resume semantic matching Agent
+  app/resumediagnosis.py  multimodal resume content and layout diagnosis Agent
+  app/knowledge/       question-level Markdown parser and BM25 search
+  app/api/             auth, CORS, SSE, limits, Web compatibility DTOs
+  app/llm/             OpenAI-compatible structured model gateway
+  app/speech.py        MiMo ASR/TTS
+  app/webcrawler/      job posting fast paths and bounded fallback
+  evals/               offline deterministic quality gate
+  tests/               pytest suite
 
 web/                   Next.js UI/BFF and document extraction
 ```
 
-See [Agent Harness and Go backend architecture](./docs/agent-harness-architecture.md) for the full design.
+See the [Python rewrite design](./docs/python-rewrite-design.md) and
+[migration plan](./docs/python-rewrite-plan.md) for the full design. Historical
+Go-era architecture notes are kept in
+[Agent Harness architecture](./docs/agent-harness-architecture.md).
 See the [v0.3.0 optimization plan](./docs/v0.3.0-optimization-plan.md) for prioritized work, acceptance metrics, and release gates.
 
 ## Model And Audio Configuration
@@ -248,7 +254,7 @@ MIMO_TTS_MODEL=mimo-v2.5-tts
 
 Notes:
 
-- The Go backend uses an OpenAI-compatible text endpoint; the default chat model is `gpt-5.5`.
+- The backend uses an OpenAI-compatible text endpoint; the default chat model is `gpt-5.5`.
 - OpenAI-compatible chat requests use `OPENAI_BASE_URL`.
 - Mimo ASR/TTS uses the official `https://api.xiaomimimo.com/v1` base URL.
 - Mimo ASR is implemented through `/chat/completions` with `input_audio`, following the official Mimo documentation.
@@ -256,18 +262,19 @@ Notes:
 
 ## ⚡ Quick Start
 
-This project uses Go 1.26 and Node.js 24: Go runs the API and Agent Harness, while Node.js is used only by the Next.js Web/BFF.
+This project uses Python 3.12 (managed with [uv](https://docs.astral.sh/uv/)) and Node.js 24: Python runs the API and Agent Harness, while Node.js is used only by the Next.js Web/BFF.
 
 ```bash
 cp .env.example .env
+cd backend && uv sync && cd ..
 cd web && npm install && cd ..
 ```
 
-Terminal 1: run the Go API:
+Terminal 1: run the API:
 
 ```bash
 cd backend
-go run ./cmd/offerpilot-api
+uv run python -m app.main
 ```
 
 Terminal 2: run the Web UI:
@@ -338,8 +345,8 @@ Production deployment details are in [docs/deployment.md](./docs/deployment.md).
 Recent local verification:
 
 ```bash
-cd backend && go test ./... && cd ..
-npx vitest run tests/unit tests/e2e
+cd backend && uv sync --frozen && uv run pytest && uv run python -m evals -pretty=false && cd ..
+npm --prefix web run test
 npm --prefix web run build
 git diff --check
 ```
@@ -347,8 +354,9 @@ git diff --check
 Expected result:
 
 ```text
-Go backend tests pass
-Unit and E2E tests pass
+Python backend tests pass
+Offline eval gate passes
+Web unit tests pass
 Next.js production build passed
 diff whitespace check passes
 ```

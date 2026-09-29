@@ -47,9 +47,12 @@
 
 ### 2.2 关键认知修正
 
-仓库 `tests/e2e/` 跑的是 **legacy TypeScript 后端 `src/server.ts`**，**不是 Go 后端**。
+方案制定时，仓库 `tests/e2e/` 跑的是 **legacy TypeScript 后端 `src/server.ts`**，**不是 Go 后端**。
 Go 后端的验收门禁是 `go test ./...` + `go run ./cmd/offerpilot-eval`。
 因此 Python 版需要**自建 pytest 套件 + 移植离线 eval harness**，不能直接复用 `tests/e2e/`。
+
+**现状（2026-09-29）**：`src/`、`backend-go-ref/`、`tests/e2e/`、`tests/unit/` 与根 npm 工程均已删除。
+Python 版自带 `backend/tests/`（pytest）与 `backend/evals/`（离线门禁），CI 定义见 `.github/workflows/ci.yml`。
 
 ---
 
@@ -349,11 +352,16 @@ SQLite 只干三件事（务实版 3 张表）：会话快照恢复、回答幂�
 
 TS 相关后端分**两块，性质不同**：
 
-### 14.1 legacy TS 后端（`src/`，约 6.3k 行）→ 退役
+### 14.1 legacy TS 后端（`src/`，约 6.3k 行）→ 已退役删除
 
 已被 Go 取代的旧实现，仅被 `npm run serve:legacy`、`npm start`（CLI）与 `tests/e2e` 使用。功能（agent loop、子 agent、工具、embedding 检索、多 provider 路由）Go 版均已重做。
 
 **决策：不移植、直接退役删除。** 理由：6.3k 行已被替代的实现翻成 Python 是纯浪费；它唯一 Go 没继承的 embedding 检索是 Go **故意**用 BM25 替代的。其 `tests/e2e` 随之一并换成 Python 测试（见 §10）。
+
+**执行结果（2026-09-29）**：`src/`、`backend-go-ref/`、`tests/unit`、`tests/e2e`、根 `package.json`、
+`package-lock.json`、`tsconfig.json`、`vitest.config.ts` 已删除。`tests/golden/api/*.json` 因
+`backend/tests/test_contract_golden.py` 依赖而保留；唯一不依赖 `src/` 的
+`web-dev-preflight` 测试迁至 `web/tests/dev-preflight.test.ts`。
 
 ### 14.2 Next.js BFF（`web/src/app/api/*`）→ 退化为纯代理
 
@@ -431,5 +439,5 @@ TS 相关后端分**两块，性质不同**：
 
 ### 16.4 收尾项
 
-- 删除 `backend-go-ref/`（Go 参照，验收通过后删除；**需用户确认后执行**）。
+- ~~删除 `backend-go-ref/`（Go 参照）~~ ✅ 已删除（2026-09-29，同时删除 legacy TS `src/` 与根 npm 工程）。
 - 补齐 §16.2 三项差距后，即可 ECS 联调（2C2G，镜像化路线，2G 内存禁构建）。

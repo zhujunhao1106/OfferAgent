@@ -1,23 +1,19 @@
 # OfferPilot Server-Backed Deployment
 
-The supported production topology uses Node.js 24 for Next.js and Go 1.26 for
-the API and Agent Harness:
+The supported production topology uses Node.js 24 for Next.js and Python 3.12
+for the API and Agent Harness:
 
 ```text
-Browser -> Next.js Web/BFF -> Go API/Harness -> SQLite
-                                  |          -> Markdown knowledge index
-                                  +---------> OpenAI-compatible LLM / MiMo
+Browser -> Next.js Web/BFF -> Python API/Harness -> SQLite
+                                  |              -> Markdown knowledge index
+                                  +-------------> OpenAI-compatible LLM / MiMo
 ```
-
-The TypeScript API is a migration rollback path (`npm run serve:legacy`), not
-the default server. New interview sessions must stay on the backend that
-created them; do not switch an active session between Go and TypeScript.
 
 ## Runtime Contract
 
 Required in production:
 
-- `OFFERPILOT_API_KEY`: bearer token shared by the Web BFF and Go API.
+- `OFFERPILOT_API_KEY`: bearer token shared by the Web BFF and API.
 - `OFFERPILOT_REQUIRE_AUTH=true`.
 - `OFFERPILOT_ALLOWED_ORIGINS`: comma-separated browser origins.
 - `OPENAI_API_KEY`, `OPENAI_BASE_URL`, and `OPENAI_MODEL`: structured
@@ -70,7 +66,7 @@ Optional:
   precedence; edit or remove that host value and run
   `docker compose up -d --force-recreate api web` to
   change the effective process environment.
-- `OFFERPILOT_HEALTH_TIMEOUT_MS`: Next.js timeout while checking the Go API.
+- `OFFERPILOT_HEALTH_TIMEOUT_MS`: Next.js timeout while checking the API.
 
 Provider credentials stay in server environment variables. Never expose them
 through browser bundles or client-side configuration. Compose passes provider
@@ -85,18 +81,19 @@ bodies are intentionally excluded from trace events.
 
 ## Local Development
 
-Install Go 1.26, Node.js 24, and dependencies, then create `.env`:
+Install Python 3.12 with [uv](https://docs.astral.sh/uv/), Node.js 24, and
+dependencies, then create `.env`:
 
 ```bash
-npm install
+cd backend && uv sync && cd ..
 npm --prefix web install
 cp .env.example .env
 ```
 
-Run the Go API and Next.js Web in separate terminals:
+Run the API and Next.js Web in separate terminals:
 
 ```bash
-npm run serve
+cd backend && uv run python -m app.main
 npm --prefix web run dev
 ```
 
@@ -114,14 +111,14 @@ A healthy, fully configured API reports the dynamically parsed knowledge count:
 {
   "status": "ready",
   "service": "offerpilot-go",
-  "version": "0.3.0-alpha.2",
+  "version": "0.4.1",
   "live": true,
   "ready": true,
   "readiness": "ready",
   "harness": "ready",
   "modelConfigured": true,
   "speechConfigured": true,
-  "knowledgeEntries": 404
+  "knowledgeEntries": 486
 }
 ```
 
@@ -139,11 +136,21 @@ cp .env.example .env
 docker compose up --build -d
 ```
 
-The API image is a multi-stage Go build. The Web image uses Node.js 24. Compose
-waits for the Go health check before starting Web traffic. The Web container
-runs as the image's unprivileged `node` user. The API host port binds to
-`127.0.0.1` by default; change `OFFERPILOT_API_BIND` only when direct remote API
-access is intentional and protected.
+The API image is a multi-stage `uv` build. The Web image uses Node.js 24.
+Compose waits for the API health check before starting Web traffic. The Web
+container runs as the image's unprivileged `node` user. The API host port binds
+to `127.0.0.1` by default; change `OFFERPILOT_API_BIND` only when direct remote
+API access is intentional and protected.
+
+## Production (Alibaba Cloud ECS)
+
+`docker-compose.prod.yml` runs prebuilt images pulled from Alibaba Cloud ACR
+instead of building on the host, because the 2 vCPU / 2 GB ECS instance cannot
+survive a Next.js build. See `deploy/ecs-init.sh` for one-time host setup and
+`deploy/env.ecs.template` for the `.env` contract. `.github/workflows/cd.yml`
+builds and pushes both images, then triggers
+`docker compose -f docker-compose.prod.yml pull && up -d` through Cloud
+Assistant (`aliyun ecs RunCommand`) after CI passes on `main`.
 
 ## Data And Recovery
 
@@ -157,17 +164,17 @@ access is intentional and protected.
   startup and exposes the resulting count in health output.
 - Do not publish `.env`, SQLite files, private resumes, transcripts, audio, or
   provider error logs.
-- To roll back, route only newly created sessions to `serve:legacy`; allow or
-  pause existing Go-owned sessions instead of translating state mid-interview.
+- To roll back, pin `OFFERPILOT_TAG` to the previous release and re-run
+  `docker compose -f docker-compose.prod.yml up -d`; allow or pause active
+  sessions instead of translating state mid-interview.
 
 ## Release Validation
 
 ```bash
-npm run build
-npm run test:go
-npx vitest run tests/unit tests/e2e
+cd backend && uv sync --frozen && uv run pytest && uv run python -m evals -pretty=false && cd ..
+npm --prefix web ci
+npm --prefix web run test
 npm --prefix web run build
-npm audit --audit-level=high --registry=https://registry.npmjs.org
 npm --prefix web audit --audit-level=high --registry=https://registry.npmjs.org
 git diff --check
 ```

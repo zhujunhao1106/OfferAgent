@@ -1,5 +1,11 @@
 # OfferPilot Agent Harness 与 Go 后端架构
 
+> **历史文档（2026-09-29 注）**：本文记录 Go 后端时期的架构设计，其中 `backend/cmd`、
+> `internal/*` 目录结构、Go 实现细节均已不再存在于仓库（Go 后端已由 Python 重写取代）。
+> Harness 的设计思想（确定性控制面 + 受约束 LLM 角色 + 结构化输出）仍然适用，
+> 当前实现见 `backend/app/harness/`，迁移方案见 [python-rewrite-plan.md](./python-rewrite-plan.md)
+> 与 [python-rewrite-design.md](./python-rewrite-design.md)。
+
 > 状态：Implemented foundation + target evolution
 > 日期：2026-08-11
 > 范围：模拟面试、JD/简历摄取、知识检索、评估报告及 TypeScript 后端到 Go 后端的迁移
