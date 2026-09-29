@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  ACR_REGISTRY: registry.cn-beijing.aliyuncs.com
+  ACR_REGISTRY: crpi-aq7wi69rg06f57t5.cn-beijing.personal.cr.aliyuncs.com
   ACR_NAMESPACE: ${{ secrets.ACR_NAMESPACE }}
   ECS_REGION: cn-beijing
   ECS_INSTANCE_ID: i-2zefdb9ur96jyr9ji6bg

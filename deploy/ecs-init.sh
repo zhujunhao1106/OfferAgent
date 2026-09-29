@@ -47,6 +47,6 @@ cat <<'NEXT'
 
 初始化完成。接下来手动做三件事:
   1) 把 docker-compose.prod.yml 和 .env 放进 /root/offerpilot
-  2) docker login registry.cn-beijing.aliyuncs.com   （用 ACR 固定密码）
+  2) docker login crpi-aq7wi69rg06f57t5.cn-beijing.personal.cr.aliyuncs.com   （用 ACR 固定密码）
   3) cd /root/offerpilot && docker compose -f docker-compose.prod.yml up -d
 NEXT
