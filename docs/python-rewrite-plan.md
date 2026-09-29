@@ -1,8 +1,10 @@
 # OfferPilot 后端 Python 重写方案
 
-> 状态：方案稿（待评审，未开始写代码）
-> 日期：2026-09-28
+> 状态：**已实现并验收**（2026-09-29 全链路验证通过）
+> 起始日期：2026-09-28 · 完成日期：2026-09-29
 > 目标：将 `backend/` 的 Go 后端（约 1.5 万行 + 0.76 万行测试，94 个文件）重写为 Python 服务，前端 Next.js（`web/`）与 BFF 层保持不变。
+>
+> **实现现状速览**：Python 后端已全部落地（19/19 路由、218 个 pytest、30 案例/90 题离线评测全绿、Docker 镜像 + docker-compose 一键起栈、经 BFF 全链路冒烟 13/13）。尚余 2 个已知差距，详见 §16。
 
 ---
 
@@ -80,7 +82,7 @@ Python API (backend/, :3001)                ← 重写对象
 |---|---|---|---|
 | `cmd/offerpilot-api` | 装配、读 env、优雅退出 | 全部 | `backend/app/main.py` |
 | `config` | 加载 `.env`（进程 env 优先） | 无 | `app/config.py` |
-| `httpapi` | 18 路由、鉴权、CORS、SSE/NDJSON、错误信封、前端兼容投影 | 全部服务 | `app/api/*` |
+| `httpapi` | 19 路由、鉴权、CORS、SSE/NDJSON、错误信封、前端兼容投影 | 全部服务 | `app/api/*` |
 | `harness` | Agent 运行时：并发信号量(MaxConcurrent=4)、每 Agent 超时、trace、断连有界执行 | `llm` | `app/harness/` |
 | `interview` | 编排：Planner→Interviewer→Assessor→Reporter、确定性策略、幂等、报告、SQLite 持久化 | `harness`/`knowledge`/`profile` | `app/interview/` |
 | `profile` | 确定性 JD/简历类型化抽取（含 grounding 校验，非 LLM） | 无 | `app/profile/` |
@@ -91,7 +93,7 @@ Python API (backend/, :3001)                ← 重写对象
 | `session` | 内存 session 注册表 + 40 条记忆 | 无 | `app/session.py` |
 | `jobmatch` | 简历-JD 语义匹配（四维评分） | `harness` | `app/jobmatch.py` |
 | `resumediagnosis` | 多模态简历诊断（文本 + ≤3 图） | `harness` | `app/resumediagnosis.py` |
-| `webcrawler` | 快路径 + 有界 Function Tool fallback，SSRF 防护 | `harness` | `app/webcrawler.py` |
+| `webcrawler` | 快路径 + 有界 Function Tool fallback，SSRF 防护 | `harness` | `app/webcrawler/` |
 | `evals` | 离线评测（30 案例/90 题，隐私零命中门禁） | 无 | `backend/evals/`（Python 版） |
 
 ---
@@ -108,7 +110,7 @@ Python API (backend/, :3001)                ← 重写对象
 | 4 | POST | `/api/session` | 是 | 返回 `{sessionId}` |
 | 5 | POST | `/api/chat` | 是 | SSE 流 |
 | 6 | POST | `/api/interview` | 是 | JSON（action 分派） |
-| 7 | POST | `/api/interview/stream` | 是 | NDJSON 流 |
+| 7 | POST | `/api/interview/stream` | 是 | NDJSON 流（trace 事件 + 末尾恰好一条 result 信封） |
 | 8 | POST | `/api/v1/interview` | 是 | 同 6 |
 | 9 | GET | `/api/v1/interviews/{id}` | 是 | 快照 |
 | 10 | GET | `/api/v1/interviews/{id}/review` | 是 | 复盘 |
@@ -123,6 +125,7 @@ Python API (backend/, :3001)                ← 重写对象
 | 19 | POST | `/api/v1/resume/diagnose` | 是 | 同 18 |
 
 > 注：BFF 的 `/api/interview` GET 用 query `interviewId`，转成后端的 path `{interviewId}`；Go 同时接受 `?interviewId=` fallback。
+> 实际实现 19 条，均集中在 `app/api/__init__.py`。
 
 ### 5.2 两套错误信封并存（重点）
 
@@ -250,7 +253,7 @@ Python API (backend/, :3001)                ← 重写对象
 | 确定性 profile 抽取 | 手写正则/启发式（对齐 `extractor.go` + grounding 校验） |
 | SQLite | `aiosqlite` 单连接 + WAL pragma |
 
-### 8.3 目录结构（替换 `backend/`）
+### 8.3 目录结构（替换 `backend/`，最终落地版）
 
 ```text
 backend/
@@ -258,55 +261,56 @@ backend/
   app/
     main.py                 # 装配、env、优雅退出（对应 cmd/offerpilot-api）
     config.py               # .env 加载（进程 env 优先）
-    api/                    # httpapi 路由 + 投影
-      routes.py  auth.py  cors.py  errors.py
-      interview.py  chat.py  speech.py  crawler.py  match.py  resume.py
-      documents.py          # /api/parse-pdf 代理（转发到文档解析模块）
+    settings.py             # 单一 Settings dataclass（集中读 env，业务取值经此）
+    middleware.py  errors.py  streaming.py  executiontrace.py
+    chat.py  speech.py  session.py
+    jobmatch.py  resumediagnosis.py
+    api/
+      __init__.py           # create_app + AppConfig + 全部 19 路由 + 错误处理器
       projections.py        # web* 前端兼容投影
-    harness/                # runtime + trace + 4 个 agent（含中文系统提示词）
-    interview/              # service + policy + types + sqlite_store
-    profile/                # 确定性抽取 + grounding 校验
-    knowledge/              # markdown 解析 + BM25 + retriever
-    documents/              # PDF/DOCX 解析（PyMuPDF + python-docx，对应原 BFF parse-pdf）
-    llm/                    # OpenAI 兼容 client + 结构化 schema
-    speech.py               # MiMo ASR/TTS
-    chat.py                 # 流式对话
-    session.py              # session 注册表 + 记忆
-    jobmatch.py  resumediagnosis.py  webcrawler.py
+    harness/                # runtime + trace + tool + interview_agent（含中文系统提示词）
+    interview/              # service + policy + types + sqlite_store + recovery + sources + ...
+    profile/                # extractor + validate + types（确定性抽取 + grounding 校验）
+    knowledge/              # index + markdown + tokenize + retriever
+    documents/              # PDF/DOCX 解析（PyMuPDF + python-docx；已实现，路由未接入）
+    llm/                    # client + config + schema + types
+    webcrawler/             # agent + embedded + fetcher + htmltree（SSRF 防护）
   evals/                    # 离线评测（Python 移植，corpus 原样复用）
-  tests/                    # pytest 套件（对应 go test + 额外契约测试）
+  tests/                    # pytest 套件（218 个）
 ```
+
+> `config_api.py`（§14.2 的 config 迁入项）未实现，`/api/config` 仍由 BFF 本地处理。
 
 ---
 
 ## 9. 分阶段实施计划（每阶段独立验收）
 
-| 阶段 | 内容 | 验收标准 |
+| 阶段 | 内容 | 状态 |
 |---|---|---|
-| **P0 骨架** | ① 录 Go golden 契约快照（18 路由校验/拒绝路径）；② env 加载、FastAPI app、health×3、鉴权/CORS、两套错误信封、NDJSON/SSE 工具 | golden 快照落盘；健康检查 + 鉴权/CORS 单测通过；health 返回字段与 Go 完全一致 |
-| **P1 知识库** | MD 解析、分词器、BM25、retriever | `knowledgeEntries == 486`；抽样查询排序与 Go 一致 |
-| **P2 LLM 网关** | chat + 结构化 JSON（Pydantic schema）+ 多模态 + 重试/降级/repair | 单测覆盖 schema 生成、降级、repair 边界 |
-| **P3 speech/chat/session** | MiMo ASR/TTS、SSE 对话、会话记忆 | ASR 重试策略、SSE 事件序列、记忆 40 条裁剪单测 |
-| **P4 harness + interview**（最重） | 运行时、4 agent 提示词、profile 抽取、编排、幂等、SQLite、报告/投影 | 幂等/策略/评分/脱敏单测 + `/api/v1/interviews/*` 恢复链 |
-| **P5 文档解析 + 其余 agent** | 文档解析（PDF/DOCX，PyMuPDF/python-docx）+ jobmatch、resumediagnosis、webcrawler | 文档解析单测 + 中文 CID 提取对比；各 agent 校验/repair/限制单测 |
-| **P6 验收** | eval harness 移植 + pytest 全量 + BFF 冒烟（含文档解析链路） | eval 门禁全绿；BFF 指向 Python 后端跑通核心 UI 流程（含 PDF/DOCX 上传） |
+| **P0 骨架** | env 加载、FastAPI app、health×3、鉴权/CORS、两套错误信封、NDJSON/SSE 工具 + golden 契约快照 | ✅ 完成 |
+| **P1 知识库** | MD 解析、分词器、BM25、retriever | ✅ 完成（`knowledgeEntries == 486`） |
+| **P2 LLM 网关** | chat + 结构化 JSON（Pydantic schema）+ 多模态 + 重试/降级/repair | ✅ 完成 |
+| **P3 speech/chat/session** | MiMo ASR/TTS、SSE 对话、会话记忆 | ✅ 完成 |
+| **P4 harness + interview**（最重） | 运行时、4 agent 提示词、profile 抽取、编排、幂等、SQLite、报告/投影 | ✅ 完成 |
+| **P5 文档解析 + 其余 agent** | jobmatch、resumediagnosis、webcrawler + 文档解析（PyMuPDF/python-docx） | ✅ agent 完成；⚠️ 文档解析模块已实现但有测试，`/api/parse-pdf` 路由未迁入后端（仍 BFF 本地解析，见 §16.2.1） |
+| **P6 验收** | eval harness 移植 + pytest 全量 + BFF 冒烟 | ✅ 完成（218 passed、eval 全绿、BFF 冒烟 13/13；**文档解析上传链路未验**） |
 
 ---
 
 ## 10. 验收标准（最终）
 
-1. **契约测试**：18 路由的请求/响应 JSON、错误信封、SSE/NDJSON 帧格式与 Go 逐字段一致（用录制的 Go 响应做快照对比）。
-2. **行为单测**：复刻 Go 单测里的核心不变量（幂等冲突、策略分支、评分公式、脱敏、BM25 排序、schema 生成）。
-3. **离线 eval**：移植 `backend/evals/`，30 案例/90 题全绿（无重复题、证据全有效、隐私零命中）。
-4. **集成冒烟**：`web` 指向 Python 后端，跑通「JD 匹配 → 模拟面试 → 报告 → 简历诊断 → 录音诊断」核心链路。
-5. **部署**：`docker-compose.yml`、`Dockerfile`、`package.json` 的 `serve` 脚本、CI 切换到 Python 后端。
-6. **文档解析**：PDF/DOCX 提取结果与原 pdfjs-dist/mammoth 输出做 side-by-side 对比（重点中文 CID 字体），差异在可接受范围。
+1. ✅ **契约测试**：`tests/test_contract_golden.py` 对已实现路由（health×3 + session/chat/interview/crawl/match/resume-diagnose/transcribe/tts/interviews 快照与 review）的请求/响应 JSON、错误信封逐字段 diff；v1 别名与 events 由行为单测覆盖；`/api/interview/stream` 的 NDJSON 信封/顺序/错误路径由 `tests/test_api_interview_stream.py` 覆盖。
+2. ✅ **行为单测**：复刻 Go 单测里的核心不变量（幂等冲突、策略分支、评分公式、脱敏、BM25 排序、schema 生成）。共 218 个 pytest 全绿。
+3. ✅ **离线 eval**：`backend/evals/` 30 案例/90 题全绿（无重复题、证据全有效、隐私零命中）。
+4. ✅ **集成冒烟**：经 BFF 跑通「JD 匹配 → 模拟面试（start/answer/report）→ 简历诊断 → 录音转写 → TTS → crawl」13/13。NDJSON `/api/interview/stream` 由单测覆盖 trace/result 信封与错误路径。
+5. ✅ **部署**：根 `Dockerfile`（python:3.12-slim + uv）+ `web/Dockerfile` + `docker-compose.yml`（api+web）；CI 切换为 Python 后端。
+6. ⚠️ **文档解析**：Python `documents/` 模块已实现 + 有单测，但 `web/src/app/api/parse-pdf` 仍本地解析，中文 CID side-by-side 对比与上传链路未验收（见 §16.2.1）。
 
 ---
 
 ## 11. 风险与注意事项
 
-- **行为契约是主风险**：Go 版花了多个版本稳定下来的一批不变量（幂等、脱敏、评分、超时语义），重写最怕"语法翻译对了、边界行为漂了"。对策：**趁 Go 还在，P0 先录 18 路由的 golden 契约快照**（校验/拒绝路径不依赖模型，无需 API key），Python 侧逐字段 diff；每阶段再用契约测试钉死，不靠"看起来差不多"。
+- **行为契约是主风险**：Go 版花了多个版本稳定下来的一批不变量（幂等、脱敏、评分、超时语义），重写最怕"语法翻译对了、边界行为漂了"。对策：**趁 Go 还在，P0 先录 19 路由的 golden 契约快照**（校验/拒绝路径不依赖模型，无需 API key），Python 侧逐字段 diff；每阶段再用契约测试钉死，不靠"看起来差不多"。
 - **提示词必须逐字搬运**：4 个 agent 的中文系统提示词（含 grounding/no-leak/no-CoT 约束）与 jobmatch/resumediagnosis/webcrawler 的评分 prompt，是输出质量的关键，不得改写。
 - **替换时机**：Python 后端在 `backend/` 内开发期间，Go 源码由 git 历史保留；建议在 P6 验收通过后再删 `backend/*.go`，避免中途失去可对照的运行参照。
 - **性能**：整体 IO 密集，Python asyncio 单进程足够（Go 版也是单进程 + 并发 4）；BM25 在启动时内存索引，486 条规模无压力。
@@ -396,3 +400,36 @@ TS 相关后端分**两块，性质不同**：
 - **多模态（resume 诊断）**：GPT-4o/4.1、Qwen-VL、GLM-4V、Doubao 均可，选定一个验证 `image_url`。
 - **ASR/TTS**：MiMo 便宜（约 1 分钟 1 分钱）够用；更高 ASR 质量可换 Whisper（贵）；中文更好 + 全家桶可换 Doubao 语音；自部署 TTS 可考虑开源 CosyVoice。
 - **检索（将来）**：加向量需引入 embedding 模型（BGE / text-embedding-3 等），与 §13.2 绑定。
+
+---
+
+## 16. 实现现状与已知差距（2026-09-29）
+
+### 16.1 已完成
+
+| 项 | 状态 |
+|---|---|
+| Python 后端（FastAPI + asyncio + Pydantic v2 + httpx + aiosqlite，Python 3.12 + uv） | ✅ 全部模块落地（`backend/app/`） |
+| 路由 | ✅ 19/19（含 `/api/interview/stream` NDJSON trace 流） |
+| 配置集中 | ✅ `app/settings.py` 单一 `Settings` dataclass（业务层不散读 env）+ `app/config.py` 只做 .env 加载 |
+| pytest 套件 | ✅ 218 passed（契约 golden / 行为 / 知识库 / harness / interview / 三 agent / 文档解析 / evals / interview-stream 流契约） |
+| 离线评测 | ✅ `backend/evals/` 30 案例 / 90 题全绿 |
+| 部署 | ✅ 根 `Dockerfile`（python:3.12-slim + uv）+ `web/Dockerfile` + `docker-compose.yml`（api+web，BFF `BACKEND_URL=http://api:3001`，Bearer 转发） |
+| 集成冒烟 | ✅ 经 BFF(:3000) 全链路 13/13（health/config/session/chat/interview start→answer→report/match/resume diagnose/tts/transcribe/crawl） |
+
+### 16.2 已知差距（2 项，均为遗留待办）
+
+1. **文档解析（PDF/DOCX）未迁入后端** —— `app/documents/` 模块已实现（PyMuPDF + python-docx）且有单测（`tests/test_documents.py`），但 `/api/parse-pdf` 仍由 BFF 本地解析（`web/src/app/api/parse-pdf/route.ts`，mammoth + pdf-text），与 §14.2 决策（BFF 退化为纯代理）偏离。
+2. **config API 未迁入后端** —— §14.2 决策「config 一并迁 Python」，实际 `/api/config` 仍由 BFF 本地读写 `.env`（`web/src/app/api/config/route.ts`），后端无此路由。生产默认 `OFFERPILOT_ENABLE_CONFIG_API=false` 禁写。
+
+### 16.3 有意偏离 Go 的点（已确认并落地）
+
+- `json_object` 兼容降级路径用**宽松解码**（`app/llm/schema.py::decode_json_lenient`，递归丢弃未知字段）：DeepSeek 在 json_object 模式下会间歇性追加 `*_note` 字段，Go 的 `DisallowUnknownFields` + 降级后无 repair 会导致诊断/匹配类接口偶发失败。严格路径（strict json_schema / 正常解码）仍 `extra="forbid"`，与 Go 一致。
+- health `service` 字段保持字面量 `offerpilot-go`（前端不依赖，对齐 golden 快照）。
+- 修复了 Go 的 typed-nil interface bug：crawler/matcher/resume 未配置时返回 503 而非 500（见 design §2.6）。
+- httpx 客户端显式传 `timeout=Timeout(config.timeout)`（Go `http.Client{}` 无默认超时，httpx 默认 5s 会误杀 >5s 的生成；已修 `llm/chat/speech` 三处）。
+
+### 16.4 收尾项
+
+- 删除 `backend-go-ref/`（Go 参照，验收通过后删除；**需用户确认后执行**）。
+- 补齐 §16.2 三项差距后，即可 ECS 联调（2C2G，镜像化路线，2G 内存禁构建）。

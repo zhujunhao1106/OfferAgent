@@ -1,7 +1,7 @@
 # OfferPilot 后端 Python 重写 — 模块级技术设计
 
-> 状态：详细设计稿（P0 编码的蓝本）
-> 日期：2026-09-28
+> 状态：**已实现**（本文与最终代码对齐；实现现状/差距见 plan §16）
+> 设计日期：2026-09-28 · 完成日期：2026-09-29
 > 配套：`docs/python-rewrite-plan.md`（方案总览/决策，本文是它的模块级展开）
 > 范围：`backend/`（Python 3.12 + FastAPI + asyncio + Pydantic v2 + httpx + aiosqlite）
 
@@ -41,8 +41,8 @@
 4. retriever = InterviewRetriever(index)     # index 来自 KnowledgeIndex.load(KNOWLEDGE_DIR)
 5. store = SQLiteStore(DB_PATH)             # 打开 + migrate（3 张表）
 6. service = InterviewService(agent=interview_agent, retriever=retriever, store=store)
-7. app = create_app(Config(...), Dependencies(...))   # FastAPI 实例 + 中间件 + 19 路由
-8. uvicorn.run(app, port=PORT or 3001)
+7. app = create_app(AppConfig(...))     # FastAPI 实例 + 中间件 + 19 路由
+8. uvicorn.Server(...).serve()          # 在 asyncio.run 内运行，与 aiosqlite 共用单事件循环
 ```
 
 关键点：`ModelConfigured = bool(OPENAI_API_KEY.strip())`、`SpeechConfigured = bool(MIMO_API_KEY.strip())`，这两个布尔决定 health 与各接口的 503 语义（§2.4、§3.1）。
@@ -51,28 +51,31 @@
 
 ```text
 main.py
- ├─ config.py            （无依赖）
- ├─ api/*                （依赖所有业务模块 + harness）
- │    ├─ middleware.py   （auth / cors / request-id / body-limit）
- │    ├─ errors.py       （两套错误信封）
- │    ├─ streaming.py    （SSE / NDJSON writer）
- │    ├─ projections.py  （web* 前端兼容投影）
- │    └─ routes/*.py
+ ├─ config.py            （.env 加载，无依赖）
+ ├─ settings.py          （单一 Settings dataclass，集中读 env，业务取值经此）
+ ├─ middleware.py        （auth / cors / request-id / body-limit）
+ ├─ errors.py            （ApiError + 三套错误信封）
+ ├─ streaming.py         （SSE / NDJSON writer）
+ ├─ executiontrace.py    （executiontrace.Event 映射）
+ ├─ chat.py  speech.py  session.py
+ ├─ jobmatch.py  resumediagnosis.py
+ ├─ api/
+ │    ├─ __init__.py     （create_app + AppConfig + 全部 19 路由 + 错误处理器）
+ │    └─ projections.py  （web* 前端兼容投影）
  ├─ harness/             （依赖 llm）
  │    ├─ runtime.py  trace.py  tool.py  interview_agent.py
  ├─ interview/           （依赖 harness + knowledge + profile）
- │    ├─ types.py  service.py  policy.py  scoring.py
- │    ├─ sqlite_store.py  recovery.py  privacy.py
- ├─ profile/             （无依赖）
- ├─ knowledge/           （无依赖）
- ├─ llm/                 （依赖 httpx）
- ├─ speech.py            （依赖 httpx）
- ├─ chat.py              （依赖 httpx）
- ├─ session.py           （无依赖）
- ├─ jobmatch.py  resumediagnosis.py  webcrawler.py   （依赖 harness）
- ├─ documents/           （依赖 PyMuPDF + python-docx）
- └─ config_api.py        （models.yml + .env 读写）
+ │    ├─ types.py  service.py  policy.py  scoring.py  sources.py
+ │    ├─ sqlite_store.py  recovery.py  profile_builder.py  memory_store.py
+ │    └─ persistence.py  errors.py
+ ├─ profile/             （无依赖；extractor.py + validate.py + types.py）
+ ├─ knowledge/           （无依赖；index.py + markdown.py + tokenize.py + retriever.py）
+ ├─ llm/                 （依赖 httpx；client.py + config.py + schema.py + types.py）
+ ├─ webcrawler/          （依赖 harness + httpx；agent.py + embedded.py + fetcher.py + htmltree.py）
+ └─ documents/           （依赖 PyMuPDF + python-docx；已实现，路由未接入，见 §11）
 ```
+
+> 与设计稿的差异：`api/` 未拆 `routes/*.py`，全部集中在 `api/__init__.py`；新增 `settings.py`（配置集中）、`executiontrace.py`；`webcrawler` 为包而非单文件；`config_api.py` 未实现（config 接口仍留在 BFF，见 §12）。
 
 ---
 
@@ -82,15 +85,22 @@ main.py
 
 **职责**：加载 `.env`，进程环境变量优先；提供类型化取值助手。
 
+> **实现落地**：拆成两个文件——`config.py` 只做 `.env` 加载与基础取值助手（`load_env` / `env_or` / `int_env` / `bool_env` / `csv_env`）；`settings.py` 定义单一 `Settings` dataclass（`from_env()` 一处集中读所有 env，含 Go duration 解析 `_go_duration`/`_duration_or_millis`），业务模块接收 `Settings` 传入的纯值、不再散读 `os.environ`。这对应"配置统一收进单一 config 文件"的约定。
+
 **接口**：
 
 ```python
+# config.py
 def load_env() -> None: ...
 def env_or(key: str, default: str) -> str: ...      # trim + 空则 default
 def int_env(key: str, default: int) -> int: ...     # 非正数则 default
 def bool_env(key: str, default: bool) -> bool: ...
-def duration_env(key: str, default: timedelta) -> timedelta: ...  # 支持 "90s" 或裸毫秒整数
 def csv_env(key: str, default: list[str]) -> list[str]: ...       # 逗号切分、trim、去空
+
+# settings.py
+@dataclass
+class Settings: ...                                  # server/openai/speech/knowledge/harness/domain/crawler/limits 全部字段
+def from_env() -> Settings: ...                      # 唯一装配入口，含 duration 解析
 ```
 
 **实现要点**：
@@ -365,6 +375,8 @@ def schema_for(model: type[BaseModel]) -> dict:
   3. 解码失败 → **恰好一次** repair：追加 assistant 原始输出（截 12000 字符）+ "Return the same answer again as one valid JSON object…Fix: <err>"。
   4. 降级与 repair **共享同一恢复预算，不叠加**。
 - 解码：Pydantic `model_validate` + `extra="forbid"`，拒绝 `null` 与尾随值。
+
+> **实现偏离（已确认，见 plan §16.3）**：`json_object` 降级路径改用 `decode_json_lenient`（递归丢弃未知字段，模型必需字段缺失仍报错），以容忍 DeepSeek 在 json_object 模式间歇性追加的 `*_note` 字段；严格路径与正常解码仍 `extra="forbid"` 与 Go 一致。
 
 ### 5.4 多模态
 
@@ -676,7 +688,9 @@ CREATE UNIQUE INDEX idx_cmd_subject ON interview_commands(principal_id, session_
 
 ## 11. documents — PDF/DOCX 解析
 
-- `POST /api/parse-pdf`（BFF 转发到后端）：multipart `file`（≤10MB）。
+> **实现状态**：`app/documents/` 模块已实现（PyMuPDF 抽文本 + 页面渲染、python-docx 读 DOCX）+ 有单测（`tests/test_documents.py`），但**尚未接入后端路由**——`/api/parse-pdf` 仍由 BFF 本地解析（`web/src/app/api/parse-pdf/route.ts`，mammoth + pdf-text）。中文 CID side-by-side 对比门禁未做，见 plan §16.2.1。
+
+- `POST /api/parse-pdf`（设计目标：BFF 转发到后端）：multipart `file`（≤10MB）。
 - `.pdf` → PyMuPDF 逐页抽文本；`?render=1` 时渲染 ≤3 页为 JPEG data URL。
 - `.docx/.doc` → python-docx 抽文本；`.tex` → 简单 LaTeX 剥离；`.txt/.md` → UTF-8 解码。
 - 返回 `{text, pages, pageImages, format}`，format∈{pdf,docx,tex,md,txt}。
@@ -695,6 +709,8 @@ CREATE UNIQUE INDEX idx_cmd_subject ON interview_commands(principal_id, session_
 ---
 
 ## 12. config_api — models.yml + .env
+
+> **实现状态**：**未迁移**。`/api/config` 仍由 BFF 本地实现（`web/src/app/api/config/route.ts` 读写 `.env`），Python 后端无此路由；生产默认 `OFFERPILOT_ENABLE_CONFIG_API=false` 禁写。见 plan §16.2.2。
 
 - `GET /api/config`：读 models.yml + .env，返回 `{text[], tts[], multimodal[], envVars{}}`；`available` = key 存在且非占位符；`envVars` 中密钥掩码 `********<last4>`。
 - `POST /api/config`：写 envVars 回 .env；生产需 `OFFERPILOT_ENABLE_CONFIG_API=true` 否则 403；key 格式 `/^[A-Z0-9_]+$/` 且在 models.yml 允许集内；掩码未变的密钥忽略。
@@ -742,9 +758,9 @@ CREATE UNIQUE INDEX idx_cmd_subject ON interview_commands(principal_id, session_
 
 ## 15. 测试与验收策略
 
-1. **golden 契约快照**（P0 第一步）：对 Go 后端录 19 路由的校验/拒绝路径响应 → `tests/golden/*.json`；Python 侧 `test_contract_golden.py` 逐条 diff（method/path/status/body JSON 逐字段）。
-2. **行为单测**：按 §14 逐条覆盖（幂等冲突、策略分支、评分公式、脱敏、BM25 排序、schema 生成、ASR 重试、事件序列）。
-3. **离线 eval**：移植 evals，30 案例全绿。
-4. **文档解析对比**：PDF/DOCX 提取 vs 原 pdfjs-dist/mammoth，中文 CID 重点。
-5. **BFF 冒烟**：web 指向 Python 后端，跑通核心链路。
-6. **部署**：Dockerfile(python:3.12-slim) + docker-compose + package.json serve 脚本 + CI 切换。
+1. ✅ **golden 契约快照**：`tests/test_contract_golden.py` 对 19 路由校验/拒绝路径逐字段 diff。
+2. ✅ **行为单测**：按 §14 覆盖，共 **218 passed**（`pytest -q`）。
+3. ✅ **离线 eval**：`backend/evals/` 30 案例/90 题全绿。
+4. ⚠️ **文档解析对比**：模块有单测，但与 pdfjs-dist/mammoth 的中文 CID side-by-side 对比**未做**（路由未接入，见 §11）。
+5. ✅ **BFF 冒烟**：经 BFF 全链路 13/13；NDJSON `/api/interview/stream` 由 `tests/test_api_interview_stream.py` 覆盖 trace/result 信封与错误路径。
+6. ✅ **部署**：Dockerfile(python:3.12-slim + uv) + docker-compose（api+web）已可一键起栈。
