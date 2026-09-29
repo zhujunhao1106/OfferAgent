@@ -58,6 +58,9 @@ class Settings:
     assessor_timeout: float = 180.0
     reporter_timeout: float = 90.0
     planner_timeout: float = 90.0
+    # Fixed 5-minute wall clock for the detached stream run (mirrors Go
+    # httpapi.InterviewRunTimeout, which is a constant and not env-driven).
+    interview_run_timeout: float = 300.0
 
     # --- domain agents ---
     matcher_timeout: float = 90.0

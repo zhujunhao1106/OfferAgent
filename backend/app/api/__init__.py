@@ -9,12 +9,13 @@ from fastapi import Depends, FastAPI, Request
 from fastapi.responses import Response, StreamingResponse
 from pydantic import ValidationError
 
+from .. import executiontrace
 from ..errors import ApiError, json_response
 from ..interview.errors import DomainError, ErrorCode
 from ..llm.schema import StrictModel
 from ..middleware import Security
 from ..session import Memory, Store
-from ..streaming import sse_done, sse_event
+from ..streaming import NDJSON_HEADERS, ndjson_line, sse_done, sse_event
 from .projections import (
     deferred_feedback,
     feedback_focus,
@@ -86,6 +87,7 @@ class AppConfig:
     max_message_chars: int = 20000
     max_tts_text_chars: int = 5000
     max_url_chars: int = 4096
+    interview_run_timeout: float = 300.0
 
 
 def health_payload(config: AppConfig, status: str) -> dict:
@@ -118,12 +120,25 @@ _INTERVIEW_ERROR_STATUS = {
 }
 
 
-def raise_interview_error(err: Exception) -> None:
+def _error_envelope(code: str, message: str, retryable: bool, field: str = "") -> dict:
+    body = {"code": code, "message": message, "retryable": retryable}
+    if field:
+        body["field"] = field
+    return {"error": body}
+
+
+def interview_error_response(err: Exception) -> tuple[int, dict]:
     if isinstance(err, DomainError):
         status = _INTERVIEW_ERROR_STATUS.get(err.code, 500)
         retryable = err.code in (ErrorCode.CONFLICT, ErrorCode.SERVICE_UNAVAILABLE, ErrorCode.INTERNAL)
-        raise ApiError(status, err.code, err.message, retryable, err.field)
-    raise ApiError(500, "internal", "Interview service failed", True)
+        return status, _error_envelope(err.code, err.message, retryable, err.field)
+    return 500, _error_envelope("internal", "Interview service failed", True)
+
+
+def raise_interview_error(err: Exception) -> None:
+    status, body = interview_error_response(err)
+    error = body["error"]
+    raise ApiError(status, error["code"], error["message"], error["retryable"], error.get("field", ""))
 
 
 async def read_body(request: Request, limit: int) -> bytes:
@@ -135,18 +150,14 @@ async def read_body(request: Request, limit: int) -> bytes:
 
 async def read_strict(request: Request, limit: int, model):
     body = await read_body(request, limit)
-    try:
-        data = json.loads(body)
-    except (json.JSONDecodeError, UnicodeDecodeError):
-        raise ApiError(400, "invalid_json", "Invalid JSON", False)
+    data = parse_json_dict(body)
     try:
         return model.model_validate(data)
     except ValidationError:
         raise ApiError(400, "invalid_json", "Invalid JSON", False)
 
 
-async def read_lenient(request: Request, limit: int) -> dict:
-    body = await read_body(request, limit)
+def parse_json_dict(body: bytes) -> dict:
     try:
         data = json.loads(body)
     except (json.JSONDecodeError, UnicodeDecodeError):
@@ -154,6 +165,72 @@ async def read_lenient(request: Request, limit: int) -> dict:
     if not isinstance(data, dict):
         raise ApiError(400, "invalid_json", "Invalid JSON", False)
     return data
+
+
+async def read_lenient(request: Request, limit: int) -> dict:
+    body = await read_body(request, limit)
+    return parse_json_dict(body)
+
+
+async def interview_response(config: AppConfig, sessions: Store, data: dict) -> tuple[int, dict]:
+    """Dispatch a parsed interview action (mirrors Go httpapi.handleInterview).
+
+    Shared by the streamed and non-streamed routes so request validation and
+    response mapping cannot drift.
+    """
+    if not config.model_configured or config.interview is None:
+        return 503, _error_envelope(ErrorCode.SERVICE_UNAVAILABLE, "Interview model is not configured", True)
+
+    action = data.get("action")
+    from ..interview.types import AnswerRequest, ReportRequest, StartRequest
+
+    if action == "start":
+        input = StartRequest.model_validate(data)
+        if not input.clientSessionId.strip():
+            input.clientSessionId = sessions.create().id
+        try:
+            output = await config.interview.start(input)
+        except DomainError as err:
+            return interview_error_response(err)
+        return 200, {
+            "interviewId": output.interviewId,
+            "state": web_state(output.state),
+            "profile": map_profile(output.profile),
+            "question": map_question(output.question, output.progress.current, output.profile),
+            "progress": map_progress(output.progress),
+        }
+    if action == "answer":
+        input = AnswerRequest.model_validate(data)
+        try:
+            output = await config.interview.answer(input)
+        except DomainError as err:
+            return interview_error_response(err)
+        next_question = None
+        if output.nextQuestion is not None:
+            next_question = map_question(output.nextQuestion, output.progress.current, None)
+        if output.feedback.deferred:
+            feedback = deferred_feedback(input.questionId)
+        else:
+            feedback = map_feedback(
+                input.questionId, output.feedback.assessment, output.feedback.summary,
+                feedback_focus(output.feedback.focus),
+            )
+        return 200, {
+            "interviewId": output.interviewId,
+            "state": web_state(output.state),
+            "feedback": feedback,
+            "nextQuestion": next_question,
+            "progress": map_progress(output.progress),
+            "reportReady": output.reportReady,
+        }
+    if action == "report":
+        input = ReportRequest.model_validate(data)
+        try:
+            output = await config.interview.report(input)
+        except DomainError as err:
+            return interview_error_response(err)
+        return 200, map_report(output.interviewId, output.report)
+    return 400, _error_envelope("validation", "action must be start, answer, or report", False, "action")
 
 
 def create_app(config: AppConfig) -> FastAPI:
@@ -267,65 +344,77 @@ def create_app(config: AppConfig) -> FastAPI:
 
     @app.post("/api/interview", dependencies=[Depends(security.authenticate)])
     async def handle_interview(request: Request):
-        if not config.model_configured:
-            raise ApiError(503, ErrorCode.SERVICE_UNAVAILABLE, "Interview model is not configured", True)
-        if config.interview is None:
-            raise ApiError(503, ErrorCode.SERVICE_UNAVAILABLE, "Interview model is not configured", True)
         data = await read_lenient(request, config.max_interview_bytes)
-        action = data.get("action")
-        from ..interview.types import AnswerRequest, ReportRequest, StartRequest
-
-        if action == "start":
-            input = StartRequest.model_validate(data)
-            if not input.clientSessionId.strip():
-                input.clientSessionId = sessions.create().id
-            try:
-                output = await config.interview.start(input)
-            except DomainError as err:
-                raise_interview_error(err)
-            return json_response({
-                "interviewId": output.interviewId,
-                "state": web_state(output.state),
-                "profile": map_profile(output.profile),
-                "question": map_question(output.question, output.progress.current, output.profile),
-                "progress": map_progress(output.progress),
-            })
-        if action == "answer":
-            input = AnswerRequest.model_validate(data)
-            try:
-                output = await config.interview.answer(input)
-            except DomainError as err:
-                raise_interview_error(err)
-            next_question = None
-            if output.nextQuestion is not None:
-                next_question = map_question(output.nextQuestion, output.progress.current, None)
-            if output.feedback.deferred:
-                feedback = deferred_feedback(input.questionId)
-            else:
-                feedback = map_feedback(
-                    input.questionId, output.feedback.assessment, output.feedback.summary,
-                    feedback_focus(output.feedback.focus),
-                )
-            return json_response({
-                "interviewId": output.interviewId,
-                "state": web_state(output.state),
-                "feedback": feedback,
-                "nextQuestion": next_question,
-                "progress": map_progress(output.progress),
-                "reportReady": output.reportReady,
-            })
-        if action == "report":
-            input = ReportRequest.model_validate(data)
-            try:
-                output = await config.interview.report(input)
-            except DomainError as err:
-                raise_interview_error(err)
-            return json_response(map_report(output.interviewId, output.report))
-        raise ApiError(400, "validation", "action must be start, answer, or report", False, "action")
+        status, body = await interview_response(config, sessions, data)
+        return json_response(body, status)
 
     @app.post("/api/v1/interview", dependencies=[Depends(security.authenticate)])
     async def handle_interview_v1(request: Request):
         return await handle_interview(request)
+
+    @app.post("/api/interview/stream", dependencies=[Depends(security.authenticate)])
+    async def handle_interview_stream(request: Request):
+        try:
+            body = await read_body(request, config.max_interview_bytes)
+        except ApiError as err:
+            payload = {"type": "result", "status": err.status, "data": err.payload()}
+
+            async def single_result():
+                yield ndjson_line(payload)
+
+            return StreamingResponse(single_result(), headers=dict(NDJSON_HEADERS))
+
+        queue: asyncio.Queue = asyncio.Queue()
+
+        def sink(event: executiontrace.Event) -> None:
+            queue.put_nowait(("trace", event.to_dict()))
+
+        async def run_detached() -> None:
+            token = executiontrace.with_sink(sink)
+            try:
+                span = executiontrace.start("request", "Execute interview action", "")
+                handler_err: Exception | None = None
+                try:
+                    try:
+                        data = parse_json_dict(body)
+                    except ApiError as err:
+                        status, result_body = err.status, err.payload()
+                    else:
+                        status, result_body = await asyncio.wait_for(
+                            interview_response(config, sessions, data),
+                            timeout=config.interview_run_timeout,
+                        )
+                    if status >= 400:
+                        handler_err = RuntimeError("interview request failed")
+                except asyncio.TimeoutError as err:
+                    status, result_body = 500, _error_envelope("internal", "Internal server error", True)
+                    handler_err = err
+                except Exception as err:  # noqa: BLE001
+                    status, result_body = 500, _error_envelope("internal", "Internal server error", True)
+                    handler_err = err
+                span.end(handler_err, "")
+                await queue.put(("result", {"type": "result", "status": status, "data": result_body}))
+            finally:
+                executiontrace.reset_sink(token)
+
+        task = asyncio.create_task(run_detached())
+
+        async def event_stream():
+            try:
+                while True:
+                    kind, payload = await queue.get()
+                    if kind == "trace":
+                        yield ndjson_line({"type": "trace", "trace": payload})
+                    else:
+                        yield ndjson_line(payload)
+                        break
+                await task
+            except asyncio.CancelledError:
+                # Client disconnected: leave the detached run to finish on its
+                # own (mirrors Go context.WithoutCancel) instead of cancelling it.
+                raise
+
+        return StreamingResponse(event_stream(), headers=dict(NDJSON_HEADERS))
 
     @app.get("/api/v1/interviews/{interview_id}", dependencies=[Depends(security.authenticate)])
     async def handle_snapshot(interview_id: str):

@@ -48,6 +48,7 @@ async def assemble(settings: Settings) -> AppConfig:
         max_message_chars=settings.max_message_chars,
         max_tts_text_chars=settings.max_tts_text_chars,
         max_url_chars=settings.max_url_chars,
+        interview_run_timeout=settings.interview_run_timeout,
     )
     app_config.store = store
 
